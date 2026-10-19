@@ -4,7 +4,8 @@ const MESI=["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","ag
 const MESI3=["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
 const CONTANTI="CONTANTI"; // causale dei movimenti fuori banca scritti a mano (il nome è rimasto quello della prima versione)
 const nomeExtra=()=>S.conto==="anna"?"Rifle":"Altro"; // nome del pulsante e dell'etichetta: per Anna è "Rifle"
-const CAUSALI={"CONTANTI":"Fuori banca","(2":"Pagamento con carta","VH":"Pagamento POS","TE":"Addebito diretto","U2":"Utenza telefonica","M4":"Bonifico in uscita","W7":"Bonifico istantaneo in uscita","W8":"Bonifico istantaneo in entrata","BP":"Bonifico in entrata","3B":"Bonifico in entrata","B8":"Emolumenti","2U":"Ricarica prepagata","EB":"Commissioni","5E":"Commissioni bonifico","0F":"Commissioni prepagata","2J":"Commissioni prepagata","18":"Competenze e spese","4K":"Imposta di bollo","4Y":"Canone carta","FT":"F24","(0":"Prelievo","F8":"Rimborso"};
+const RETTIFICA="RETTIFICA"; // correzione scritta a mano che non fa parte della scheda Altro
+const CAUSALI={"CONTANTI":"Fuori banca","RETTIFICA":"Rettifica scritta a mano","(2":"Pagamento con carta","VH":"Pagamento POS","TE":"Addebito diretto","U2":"Utenza telefonica","M4":"Bonifico in uscita","W7":"Bonifico istantaneo in uscita","W8":"Bonifico istantaneo in entrata","BP":"Bonifico in entrata","3B":"Bonifico in entrata","B8":"Emolumenti","2U":"Ricarica prepagata","EB":"Commissioni","5E":"Commissioni bonifico","0F":"Commissioni prepagata","2J":"Commissioni prepagata","18":"Competenze e spese","4K":"Imposta di bollo","4Y":"Canone carta","FT":"F24","(0":"Prelievo","F8":"Rimborso"};
 const COME={manuale:"Scelta a mano su questo movimento",regola:"Regola imparata",causale:"Riconosciuta dal codice causale della banca",dizionario:"Riconosciuta dall'elenco degli esercenti",predefinita:"Non riconosciuta"};
 const PROTETTE=["da-classificare","altre-entrate","saldo-iniziale"]; // servono come ripiego o hanno un significato fisso: non si eliminano
 const SALDO="saldo-iniziale"; // soldi portati dal vecchio conto: né entrate né giroconti
@@ -323,7 +324,7 @@ function renderLista(){
 function rigaMov(m,C){
   const [,mm,dd]=m.data.split("-"),c=m._c,todo=c.id==="da-classificare";
   return `<button class="mov" data-act="mov" data-id="${m.id}"><span class="dt"><b>${+dd}</b>${MESI3[+mm-1]}</span>
-    <span style="min-width:0"><span class="who" style="display:block">${esc(m._e)}</span><span class="sub">${m.causale===CONTANTI?`<span class="pill cash">${nomeExtra().toLowerCase()}</span>`:""}<span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
+    <span style="min-width:0"><span class="who" style="display:block">${esc(m._e)}</span><span class="sub">${m.causale===CONTANTI?`<span class="pill cash">${nomeExtra().toLowerCase()}</span>`:m.causale===RETTIFICA?`<span class="pill">rettifica</span>`:""}<span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
     <span class="amt num${m.importo>0?" pos":""}">${eurS(m.importo)}</span></button>`;
 }
 function chipsCategorie(C,sel){
@@ -394,10 +395,10 @@ function sheetContanti(){
   ${chipsAlbero(cs,(c,sub)=>`<button class="chip${sub?" sub":""}" data-act="c-cat" data-cat="${esc(c.id)}" aria-pressed="${f.cat===c.id}">${esc(c.nome)}</button>`)}</div>
   <div class="sh-foot">${sheet.id?`<button class="btn ${conf?"danger":"ghost"}" data-act="c-elimina">${conf?"Tocca di nuovo per eliminare":"Elimina"}</button>`:""}<span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="c-salva">Salva</button></div>`;
 }
-// Scheda "Altro" / "Rifle": solo i movimenti fuori banca scritti a mano, per tenerne traccia. Restano fuori quelli
-// di categorie che non sono entrate/uscite (polizza vita, saldo iniziale, giroconti): contano altrove.
+// Scheda "Altro" / "Rifle": tutti i movimenti inseriti con il pulsante + Altro / + Rifle (causale CONTANTI).
+// Le rettifiche (causale RETTIFICA, es. polizza pagata dal vecchio conto) stanno nel conto ma non qui.
 function vAltro(C){
-  const nome=nomeExtra(),tutti=C.mov.filter(m=>m.causale===CONTANTI&&(C.byId[m._c.id]?.tipo||"normale")==="normale");
+  const nome=nomeExtra(),tutti=C.mov.filter(m=>m.causale===CONTANTI);
   const p=S.per==="tutto"?"":S.per==="anno"?S.mese.slice(0,4):S.mese,ms=tutti.filter(m=>m.data.startsWith(p));
   const ent=ms.filter(m=>m.importo>0).reduce((s,m)=>s+m.importo,0),usc=-ms.filter(m=>m.importo<0).reduce((s,m)=>s+m.importo,0);
   let h=barraPeriodo(true)+`<div class="toolbar"><p class="meta grow">Entrate e uscite fuori banca scritte a mano nel conto ${esc(contoNome(S.conto))}: ${tutti.length} in tutto.</p><button class="btn" data-act="contanti-nuovo">+ ${nome}</button></div>`;
@@ -410,7 +411,7 @@ function vAltro(C){
     const tk=gr[k].reduce((s,m)=>s+m.importo,0);
     h+=`<div class="mgroup"><h3>${ymNome(k)} <span class="num">${eurS(tk)}</span></h3><div class="mlist">${gr[k].map(m=>rigaMov(m,C)).join("")}</div></div>`;
   }
-  return h+`<p class="hint" style="margin-top:12px">Qui compaiono solo entrate e uscite. I movimenti scritti a mano per polizza vita, saldo iniziale o giroconti restano nel conto ma non in questa pagina.</p>`;
+  return h+`<p class="hint" style="margin-top:12px">Qui compare tutto ciò che è stato inserito con «+ ${nome}». Le rettifiche (es. polizza vita pagata dal vecchio conto) restano nel conto ma non in questa pagina.</p>`;
 }
 const ordinaMov=C=>C.mov.sort((a,b)=>a.data<b.data?1:a.data>b.data?-1:a.id-b.id);
 async function salvaContanti(){

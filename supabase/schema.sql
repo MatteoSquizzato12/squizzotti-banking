@@ -85,6 +85,7 @@ create table if not exists public.importazioni (
 
 -- ---------- Movimenti ----------
 -- causale CONTANTI = entrata/uscita in contanti scritta a mano nell'app (chiave unica, mai uguale a quella di un XLS).
+-- causale RETTIFICA = correzione scritta a mano (es. polizza pagata dal vecchio conto): conta nei totali, non nella scheda Altro.
 -- chiave = data contabile | causale | importo | descrizione: serve al controllo dei duplicati.
 -- Non è unica di proposito: due pagamenti identici nello stesso giorno sono entrambi veri.
 -- categoria = solo la scelta fatta a mano su quel movimento (null = decide la regola).

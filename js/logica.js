@@ -80,7 +80,7 @@ function confronta(movimentiFile,chiaviSalvate){
 const TAGLIA=s=>pulisci(s).replace(/[.\s-]+$/,"");
 function esercente(m){
   const d=pulisci(m.descrizione);
-  if(m.causale==="CONTANTI")return d||"Contanti"; // scritto a mano: la descrizione è già il nome
+  if(m.causale==="CONTANTI"||m.causale==="RETTIFICA")return d||"Movimento a mano"; // scritto a mano: la descrizione è già il nome
   let x;
   if((x=d.match(/C\/O\s+(.+?)(?:\s+CARTA\s+N\.|\s+-\s+CIRCUITO|$)/i)))return TAGLIA(x[1]);
   if((x=d.match(/(?:a vs favore|BONIFICO A VOSTRO FAVORE|DISPOSIZIONE VS\. FAVORE|EMOLUMENTI)\s+(.+?)\s+(?:Data Regolamento|Coord|CRO)/i)))return TAGLIA(x[1]);
