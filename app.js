@@ -256,8 +256,7 @@ function renderLista(){
   const el=$("mres");if(!el)return;
   const ms=filtrati(),C=C0();
   if(!ms.length){el.innerHTML=`<div class="card empty"><b>Nessun movimento.</b>Prova a cambiare periodo, filtri o ricerca.</div>`;return;}
-  const tot=ms.reduce((s,m)=>s+m.importo,0);
-  let h=`<p class="meta">${ms.length} ${ms.length===1?"movimento":"movimenti"} · saldo dei movimenti mostrati <b class="num">${eurS(tot)}</b></p>`;
+  let h="";
   const vis=ms.slice(0,S.lim),gr={};
   for(const m of vis)(gr[m.data.slice(0,7)]??=[]).push(m);
   for(const k of Object.keys(gr).sort().reverse()){
