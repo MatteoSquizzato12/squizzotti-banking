@@ -29,7 +29,7 @@ function setPref(k,v){try{localStorage.setItem("bank:"+k,v);}catch(e){}}
 
 const sb=supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});
 let user=null,persona=null,chan=null;
-const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",aperte:new Set(),filtri:filtriVuoti(),lim:150,imp:null,conferma:{},msg:"Carico i conti…"};
+const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",filtri:filtriVuoti(),lim:150,imp:null,conferma:{},msg:"Carico i conti…"};
 const D={conti:[],c:{}}; // c[conto] = {mov, cats, regole, imps, obi, mesi}
 let sheet=null;
 
@@ -189,10 +189,10 @@ function vPanoramica(C){
   const PV="polizza-vita",pv=C.mov.some(m=>m._c.id===PV||radice(m._c.id)===PV);
   const pvSomma=ms=>-ms.filter(m=>m._c.id===PV||radice(m._c.id)===PV).reduce((s,m)=>s+m.importo,0);
   const agg={};
-  for(const [id,v] of Object.entries(T.net)){const r=radice(id),a=agg[r]??={v:0,f:{}};a.v+=v;a.f[id]=(a.f[id]||0)+v;}
-  const usc=[],ent=[];
-  for(const [id,a] of Object.entries(agg))if(Math.abs(a.v)>0.004)(a.v<0?usc:ent).push([id,Math.abs(a.v),a.f]);
-  usc.sort((a,b)=>b[1]-a[1]);ent.sort((a,b)=>b[1]-a[1]);
+  for(const [id,v] of Object.entries(T.net)){const r=radice(id),a=agg[r]??={v:0};a.v+=v;}
+  const usc=[];
+  for(const [id,a] of Object.entries(agg))if(a.v<-0.004)usc.push([id,-a.v]);
+  usc.sort((a,b)=>b[1]-a[1]);
   h+=`<div class="kpis${pv?" k4":""}">
     <div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${T.e>0.004?"+":""}${eur(T.e)}</div></div>
     <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${T.u>0.004?"−":""}${eur(T.u)}</div></div>
@@ -203,11 +203,6 @@ function vPanoramica(C){
   h+=`<div class="card" style="margin-bottom:14px"><div class="card-head"><h2 class="dotted">${S.per==="anno"?"Mesi del "+S.mese.slice(0,4):"Ultimi 12 mesi"}</h2><div class="legend"><span><i class="key in"></i>Entrate</span><span><i class="key out"></i>Uscite</span></div></div>
     <div class="chart" id="chart-mesi"></div>
     <details class="numbers"><summary>Vedi i numeri</summary>${tabellaMesi(C)}</details></div>`;
-  h+=`<div class="grid g2">
-    <div class="card"><div class="card-head"><h2 class="dotted">Uscite per categoria</h2><p class="meta">tocca per vedere i movimenti</p></div>${barreCat(usc,T.u,"out")}</div>
-    <div class="card"><div class="card-head"><h2 class="dotted">Entrate per categoria</h2></div>${barreCat(ent,T.e,"in")}
-    ${personale()&&C.obi.length?`<div class="sec"><h3>Obiettivi</h3>${C.obi.map(o=>miniObiettivo(C,o)).join("")}<p style="margin:10px 0 0"><button class="linkbtn" data-act="tab" data-tab="obiettivi">Tutti gli obiettivi</button></p></div>`:""}</div>
-  </div>`;
   return h;
 }
 // Una barra per categoria principale. Se ha sottocategorie si apre e mostra il dettaglio.
@@ -264,24 +259,6 @@ function tipTorta(){
   el.onmousemove=e=>{const t=e.target.closest("[data-tip]"),x=t&&cardTorta.dati?.[+t.dataset.tip];if(!x){nascondiTip();return;}
     mostraTip(e,`<b>${esc(x.nome)}</b><div><span><i class="key" style="background:${x.colore}"></i>Uscite</span><span class="num">${eur(x.v)}</span></div><div><span>Quota</span><span class="num">${x.pc.toFixed(1).replace(".",",")}%</span></div>`);};
   el.onmouseleave=nascondiTip;
-}
-function barreCat(rows,tot,cls){
-  if(!rows.length)return `<p class="meta">Nessun movimento in questo periodo.</p>`;
-  const max=rows[0][1]||1,segno=cls==="out"?-1:1;
-  const barra=(id,v,nome,extra,act)=>`<button class="cbar ${cls}${extra||""}" data-act="${act||"vai-cat"}" data-cat="${esc(id)}" title="${esc(nome)}: ${eur(v)}">
-    <span class="n">${nome}</span><span class="a num">${eur(v)}<span class="p">${tot?Math.round(v/tot*100):0}%</span></span>
-    <span class="track"><span class="fill" style="width:${(v/max*100).toFixed(1)}%"></span></span></button>`;
-  return `<div class="cbars">${rows.map(([id,v,f])=>{
-    if(!figli(id).length)return barra(id,v,esc(nomeCat(id)));
-    const aperta=S.aperte.has(id);
-    let h=barra(id,v,`<span class="chev" aria-hidden="true">${aperta?"▾":"▸"}</span>${esc(nomeCat(id))}`,aperta?" aperta":"","apri-cat").replace("<button ",`<button aria-expanded="${aperta}" `);
-    if(aperta){
-      const sub=Object.entries(f).map(([k,x])=>[k,x*segno]).filter(([,x])=>x>0.004).sort((a,b)=>b[1]-a[1]);
-      h+=`<div class="csub">${sub.map(([k,x])=>barra(k,x,esc(k===id?"Senza sottocategoria":C0().byId[k].nome)," sub")).join("")}
-        <button class="linkbtn" data-act="vai-cat" data-cat="${esc(id)}">Tutti i movimenti ${esc(nomeCat(id))}</button></div>`;
-    }
-    return h;
-  }).join("")}</div>`;
 }
 function mesiGrafico(){return S.per==="anno"?mesiTra(S.mese.slice(0,4)+"-01",S.mese.slice(0,4)+"-12"):mesiTra(ymAdd(S.mese,-11),S.mese);}
 function tabellaMesi(C){
@@ -599,8 +576,6 @@ function cardObiettivo(C,o){
   <span class="state ${p.stato[0]}">${p.stato[0]==="ok"?"✓ ":""}${esc(p.stato[1])}</span>
   ${p.storia?`<div class="months" aria-label="Ultimi mesi">${p.storia.map(s=>`<span class="${s.ok?"hit":""}" title="${ymNome(s.k)}: ${s.ok?"raggiunto":"non raggiunto"}">${MESI3[+s.k.slice(5)-1]}${s.ok?" ✓":""}</span>`).join("")}</div>`:""}</div>`;
 }
-function miniObiettivo(C,o){const p=progresso(C,o),pc=Math.max(0,Math.min(100,p.v/p.target*100));
-  return `<div style="margin:8px 0"><div class="vals num" style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(o.nome)}</span><span>${eurS(p.v)} / ${eur(p.target)}</span></div><div class="meter" style="margin-top:4px"><span style="width:${pc}%"></span></div></div>`;}
 function vObiettivi(C){
   const inv=C.cats.filter(c=>c.tipo==="investimento").map(c=>c.id),nInv=C.mov.filter(m=>inv.includes(m._c.id)).length;
   let h=`<div class="toolbar"><p class="meta grow">Gli obiettivi mensili si leggono sul mese scelto in Panoramica (${ymNome(S.mese)}).</p><button class="btn" data-act="obi-nuovo">Nuovo obiettivo</button></div>`;
@@ -784,7 +759,6 @@ document.addEventListener("click",e=>{
   else if(a==="mov-auto")movAuto();
   else if(a==="cat-nuova"){sheet={tipo:"cat",id:null,f:{nome:"",tipo:"normale",verso:"uscita",padre:""}};renderSheet();}
   else if(a==="cat-mod"){const c=C0().byId[b.dataset.cat];sheet={tipo:"cat",id:c.id,f:{nome:c.nome,tipo:c.tipo,verso:c.verso,padre:c.padre||""}};renderSheet();}
-  else if(a==="apri-cat"){const id=b.dataset.cat;S.aperte.has(id)?S.aperte.delete(id):S.aperte.add(id);renderMain();}
   else if(a==="cat-f"){sheet.f[b.dataset.k]=b.dataset.v;renderSheet();}
   else if(a==="cat-salva")salvaCat();
   else if(a==="cat-elimina")eliminaCat();
