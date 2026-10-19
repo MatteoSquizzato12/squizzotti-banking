@@ -148,10 +148,9 @@ function vPanoramica(C){
   let h=barraPeriodo(false);
   if(todo)h+=`<div class="banner"><p><b>${todo} ${todo===1?"movimento":"movimenti"} da classificare</b> in questo periodo. Ogni correzione insegna all'app a riconoscerli da sola.</p><button class="btn small" data-act="vai-todo">Classifica ora</button></div>`;
   h+=`<div class="kpis">
-    <div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${eur(T.e)}</div></div>
-    <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${eur(T.u)}</div></div>
+    <div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${T.e>0.004?"+":""}${eur(T.e)}</div></div>
+    <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${T.u>0.004?"−":""}${eur(T.u)}</div></div>
     <div class="kpi hero"><div class="k">Risparmio</div><div class="v num">${eurS(T.r)}</div><div class="d">${quota==null?"&nbsp;":quota+"% delle entrate"}</div></div>
-    <div class="kpi"><div class="k">${T.inv?"Investito":"Giroconti"}</div><div class="v num">${T.inv?eur(T.inv):eurS(T.tr)}</div><div class="d">${T.inv&&T.tr?"giroconti "+eurS(T.tr):"esclusi da entrate e uscite"}${T.si?"<br>saldo iniziale "+eur(T.si)+" (escluso)":""}</div></div>
   </div>`;
   h+=`<div class="card" style="margin-bottom:14px"><div class="card-head"><h2 class="dotted">${S.per==="anno"?"Mesi del "+S.mese.slice(0,4):"Ultimi 12 mesi"}</h2><div class="legend"><span><i class="key in"></i>Entrate</span><span><i class="key out"></i>Uscite</span></div></div>
     <div class="chart" id="chart-mesi"></div>

@@ -100,8 +100,10 @@ h2{font-size:18px} h3{font-size:15px}
 @media (max-width:420px){.g2{grid-template-columns:1fr}}
 
 /* ---------- numeri in evidenza ---------- */
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-@media (max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,300px));justify-content:center;gap:10px;margin-bottom:14px}
+.kpi{text-align:center}
+.kpi .k{justify-content:center}
+@media (max-width:560px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi.hero{grid-column:1 / -1}}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:12px 14px;min-width:0}
 .kpi .k{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:7px}
 .kpi .v{font-size:clamp(19px,2.6vw,26px);font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
