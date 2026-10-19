@@ -228,36 +228,33 @@ function cardSaldi(C){
   ${S.conto==="comune"?"":`<div class="saldo"><div class="k">Saldo ${nome}</div><div class="big num">${eurS(x.altro)}</div></div>`}</div></div>`;
 }
 /* ---------- ciambella delle uscite ---------- */
-// Colori fissi: le 8 categorie principali con più uscite in tutto lo storico del conto hanno ciascuna il proprio colore
-// (8 colori verificati per daltonismo, --s1..--s8, nell'ordine validato); tutte le altre finiscono nella fetta grigia.
+// Colori fissi per categoria, in ordine di uscite in tutto lo storico del conto: le prime 8 hanno gli 8 colori verificati
+// per daltonismo (--s1..--s8), le successive 8 le tinte più tenui degli stessi colori (--s9..--s16), poi grigio.
 // Così un colore indica sempre la stessa categoria, in qualunque mese o anno.
 function coloriTorta(){
   const C=C0(),tot={};
   for(const m of C.mov){const c=C.byId[m._c.id];if(!c||c.tipo!=="normale"||m._c.id===SALDO)continue;const r=radice(m._c.id);tot[r]=(tot[r]||0)+m.importo;}
-  const ord=Object.entries(tot).filter(([id,v])=>v<0&&C.byId[id]?.verso!=="entrata").sort((a,b)=>a[1]-b[1]).slice(0,8);
+  const ord=Object.entries(tot).filter(([id,v])=>v<0&&C.byId[id]?.verso!=="entrata").sort((a,b)=>a[1]-b[1]);
   return Object.fromEntries(ord.map(([id],i)=>[id,i+1]));
 }
 function cardTorta(usc,tot){
   if(!usc.length||tot<=0.004)return "";
-  const col=coloriTorta();
-  const top=usc.filter(([id])=>col[id]).map(([id,v])=>({id,v,nome:nomeCat(id)}));
-  const resto=usc.filter(([id])=>!col[id]);
-  if(resto.length)top.push({id:"",v:resto.reduce((s,r)=>s+r[1],0),nome:resto.length===1?nomeCat(resto[0][0]):`Altre ${resto.length} categorie`});
-  const fill=x=>x.id?`var(--s${col[x.id]})`:"var(--s-altro)";
+  const col=coloriTorta(),top=usc.map(([id,v])=>({id,v,nome:nomeCat(id)}));
+  const fill=x=>col[x.id]&&col[x.id]<=16?`var(--s${col[x.id]})`:"var(--s-altro)";
   const R=100,r=64,cx=110,cy=110,pt=(a,rr)=>`${(cx+rr*Math.sin(a)).toFixed(2)} ${(cy-rr*Math.cos(a)).toFixed(2)}`;
   let a0=0,svg="";
   top.forEach((x,i)=>{
     const a1=a0+x.v/tot*2*Math.PI,big=a1-a0>Math.PI?1:0;
     const d=a1-a0>=2*Math.PI-1e-6?`M${pt(0,R)}A${R} ${R} 0 1 1 ${pt(Math.PI,R)}A${R} ${R} 0 1 1 ${pt(0,R)}M${pt(0,r)}A${r} ${r} 0 1 0 ${pt(Math.PI,r)}A${r} ${r} 0 1 0 ${pt(0,r)}Z`
       :`M${pt(a0,R)}A${R} ${R} 0 ${big} 1 ${pt(a1,R)}L${pt(a1,r)}A${r} ${r} 0 ${big} 0 ${pt(a0,r)}Z`;
-    svg+=`<path d="${d}" style="fill:${fill(x)}" fill-rule="evenodd" class="fetta"${x.id?` data-act="vai-cat" data-cat="${esc(x.id)}"`:""} data-tip="${i}"/>`;
+    svg+=`<path d="${d}" style="fill:${fill(x)}" fill-rule="evenodd" class="fetta" data-act="vai-cat" data-cat="${esc(x.id)}" data-tip="${i}"/>`;
     a0=a1;
   });
-  const leg=top.map((x,i)=>{const pc=Math.round(x.v/tot*100);
+  const leg=top.map((x,i)=>{const q=x.v/tot*100,pc=q<1?"<1":Math.round(q);
     const corpo=`<i class="sw" style="background:${fill(x)}"></i><span class="n">${esc(x.nome)}</span><span class="a num">${eur(x.v)}</span><span class="p num">${pc}%</span>`;
-    return x.id?`<button class="dleg" data-act="vai-cat" data-cat="${esc(x.id)}" data-tip="${i}">${corpo}</button>`:`<div class="dleg" data-tip="${i}" title="${esc(resto.map(r=>nomeCat(r[0])).join(", "))}">${corpo}</div>`;}).join("");
+    return `<button class="dleg" data-act="vai-cat" data-cat="${esc(x.id)}" data-tip="${i}">${corpo}</button>`;}).join("");
   cardTorta.dati=top.map(x=>({...x,pc:x.v/tot*100,colore:fill(x)}));
-  return `<div class="card" style="margin-bottom:14px"><div class="card-head"><h2 class="dotted">Dove vanno le uscite</h2><p class="meta">tocca una categoria per vedere i movimenti</p></div>
+  return `<div class="card" style="margin-bottom:14px"><div class="card-head"><h2>Dove vanno le uscite</h2><p class="meta">tocca una categoria per vedere i movimenti</p></div>
   <div class="donutwrap"><div class="donut" id="donut"><svg viewBox="0 0 220 220" role="img" aria-label="Uscite per categoria">${svg}
     <text x="110" y="106" text-anchor="middle" class="dtot num">${eur(tot)}</text><text x="110" y="128" text-anchor="middle" class="dlab">uscite</text></svg></div>
   <div class="dlegend">${leg}</div></div></div>`;

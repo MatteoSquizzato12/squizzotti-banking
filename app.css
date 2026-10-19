@@ -5,8 +5,9 @@
   --yellow:#FAB80C; --on-yellow:#1E2021; --soft:#FFF1C7; --soft-ink:#5A4300;
   /* Grafici: colori verificati per daltonismo e contrasto (entrate blu, uscite ocra) */
   --in:#2A78D6; --out:#C98500; --grid:#E6E7E8; --axis:#C3C5C7;
-  /* Ciambella: 8 colori categoriali verificati (ordine fisso) + grigio per "Altre" */
+  /* Ciambella: 8 colori categoriali verificati (ordine fisso), 8 tinte degli stessi colori, grigio oltre la 16a */
   --s1:#2A78D6;--s2:#EB6834;--s3:#1BAF7A;--s4:#EDA100;--s5:#E87BA4;--s6:#008300;--s7:#6250D6;--s8:#E34948;--s-altro:#AEB2B4;
+  --s9:#9EC5F4;--s10:#F5B08F;--s11:#8FDCBF;--s12:#F6D27A;--s13:#F4BCD1;--s14:#7CC47C;--s15:#B3AAF0;--s16:#F1A3A2;
   --ok:#2E7D4F; --warn:#C98500; --warn-bg:#FFF3D1; --bad:#B3261E; --bad-bg:#FBE3E1;
   --f-display:"Akira Expanded", "Arial Black", system-ui, sans-serif;
   --f-body:"Poppins", "Segoe UI", system-ui, sans-serif;
@@ -17,6 +18,7 @@
   --soft:#2E2817; --soft-ink:#F3D27A;
   --in:#3987E5; --out:#C98500; --grid:#2C2F30; --axis:#4A4F51;
   --s1:#3987E5;--s2:#D95926;--s3:#199E70;--s4:#C98500;--s5:#D55181;--s6:#008300;--s7:#9085E9;--s8:#E66767;--s-altro:#5E6466;
+  --s9:#23548F;--s10:#9A4320;--s11:#13704F;--s12:#8A6000;--s13:#93385A;--s14:#005C00;--s15:#4B3FA0;--s16:#9E3434;
   --ok:#71C796; --warn:#E5A929; --warn-bg:#33290F; --bad:#EE8276; --bad-bg:#3A1C18; color-scheme:dark;
 }}
 :root[data-theme="dark"]{
@@ -24,6 +26,7 @@
   --soft:#2E2817; --soft-ink:#F3D27A;
   --in:#3987E5; --out:#C98500; --grid:#2C2F30; --axis:#4A4F51;
   --s1:#3987E5;--s2:#D95926;--s3:#199E70;--s4:#C98500;--s5:#D55181;--s6:#008300;--s7:#9085E9;--s8:#E66767;--s-altro:#5E6466;
+  --s9:#23548F;--s10:#9A4320;--s11:#13704F;--s12:#8A6000;--s13:#93385A;--s14:#005C00;--s15:#4B3FA0;--s16:#9E3434;
   --ok:#71C796; --warn:#E5A929; --warn-bg:#33290F; --bad:#EE8276; --bad-bg:#3A1C18; color-scheme:dark;
 }
 *{box-sizing:border-box}
