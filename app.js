@@ -107,17 +107,31 @@ function renderMain(){
   else el.innerHTML=S.imp?vAnteprima(C):vImporta(C);
   el.insertAdjacentHTML("beforeend",`<p class="meta" style="text-align:center;margin-top:36px">Accesso come ${esc(user?.email||"")} · <button class="linkbtn" data-act="logout">Log out</button></p>`);
   disegnaGrafici();
+  const ml=el.querySelector(".mesi"),on=ml&&ml.querySelector('[aria-pressed="true"]');
+  if(on&&ml.scrollWidth>ml.clientWidth)ml.scrollLeft=on.offsetLeft-ml.offsetLeft-(ml.clientWidth-on.offsetWidth)/2;
 }
 function nessunDato(C){
   return `<div class="card empty"><b>Nessun movimento.</b>Carica il primo XLS di Banca Valsabbina per il conto ${esc(contoNome(S.conto))}.<br><br><button class="btn" data-act="tab" data-tab="importa">Importa XLS</button></div>`;
 }
+// Mese/Anno + una casella per ogni anno con movimenti e (in modalità Mese) per ogni mese dell'anno scelto.
 function barraPeriodo(conTutto){
-  const lab=S.per==="tutto"?"Tutti":S.per==="anno"?S.mese.slice(0,4):ymNome(S.mese);
-  const opts=[["mese","Mese"],["anno","Anno"]];if(conTutto)opts.push(["tutto","Tutto"]);
-  return `<div class="toolbar"><div class="seg" role="group" aria-label="Periodo">${opts.map(([k,t])=>`<button data-act="per" data-per="${k}" aria-pressed="${S.per===k}">${t}</button>`).join("")}</div>
-  ${S.per==="tutto"?"":`<div class="period"><button class="iconbtn" data-act="prev" aria-label="Periodo precedente">‹</button><span class="label">${lab}</span><button class="iconbtn" data-act="next" aria-label="Periodo successivo">›</button></div>`}</div>`;
+  const C=C0(),opts=[["mese","Mese"],["anno","Anno"]];if(conTutto)opts.push(["tutto","Tutto"]);
+  let h=`<div class="toolbar periodi"><div class="seg" role="group" aria-label="Periodo">${opts.map(([k,t])=>`<button data-act="per" data-per="${k}" aria-pressed="${S.per===k}">${t}</button>`).join("")}</div>`;
+  if(S.per!=="tutto"){
+    const anno=S.mese.slice(0,4),y0=+(C.primo||anno).slice(0,4),y1=Math.max(+(C.ultimo||anno).slice(0,4),+anno),anni=[];
+    for(let y=Math.min(y0,+anno);y<=y1;y++)anni.push(String(y));
+    h+=`<div class="chipline anni" role="group" aria-label="Anno">${anni.map(y=>`<button class="pchip" data-act="anno" data-y="${y}" aria-pressed="${y===anno}">${y}</button>`).join("")}</div>`;
+    if(S.per==="mese")h+=`<div class="chipline mesi" role="group" aria-label="Mese">${MESI3.map((m,i)=>{const k=anno+"-"+String(i+1).padStart(2,"0");
+      return `<button class="pchip${C.tot[k]?"":" vuoto"}" data-act="mese" data-ym="${k}" aria-pressed="${k===S.mese}" title="${ymNome(k)}${C.tot[k]?"":": nessun movimento"}">${m}</button>`;}).join("")}</div>`;
+  }
+  return h+"</div>";
 }
-
+// Cambiando anno in modalità Mese resta lo stesso mese, se ha movimenti; altrimenti l'ultimo mese con movimenti di quell'anno.
+function scegliAnno(y){
+  const C=C0();let k=y+S.mese.slice(4);
+  if(S.per==="mese"&&!C.tot[k]){const ks=Object.keys(C.tot).filter(x=>x.startsWith(y)).sort();if(ks.length)k=ks[ks.length-1];}
+  S.mese=k;S.lim=150;renderMain();
+}
 /* ---------- panoramica ---------- */
 function vPanoramica(C){
   if(!C.mov.length)return nessunDato(C);
@@ -505,7 +519,7 @@ async function confermaImport(){
   if(error){btn.disabled=false;btn.textContent="Riprova";return errore(error);}
   S.imp=null;await caricaConto(S.conto);
   S.mese=scelti.map(m=>m.data).sort().pop().slice(0,7);S.per="mese";S.tab="panoramica";
-  renderAll();toast(`Importati ${scelti.length} movimenti.`);
+  renderAll();scrollTo({top:0});toast(`Importati ${scelti.length} movimenti.`);
 }
 async function annullaImport(id){
   const k="imp"+id;
@@ -527,7 +541,6 @@ let toastT;function toast(msg){const el=$("toast");el.textContent=msg;el.hidden=
 function errore(e){console.error(e);toast(!navigator.onLine?"Sei offline: riprova quando torna la connessione.":"Non salvato: "+(e.message||"errore"));}
 
 /* ===================== eventi ===================== */
-function spostaPeriodo(d){S.mese=S.per==="anno"?ymAdd(S.mese,12*d):ymAdd(S.mese,d);S.lim=150;renderMain();}
 document.addEventListener("click",e=>{
   if(e.target.id==="overlay"){chiudi();return;}
   const b=e.target.closest("[data-act]");if(!b)return;const a=b.dataset.act;
@@ -536,9 +549,8 @@ document.addEventListener("click",e=>{
   if(a==="conto"){if(S.conto!==b.dataset.id)apriConto(b.dataset.id);}
   else if(a==="tab"){S.tab=b.dataset.tab;S.lim=150;nascondiTip();renderAll();scrollTo({top:0});}
   else if(a==="per"){S.per=b.dataset.per;S.lim=150;renderMain();}
-  else if(a==="prev")spostaPeriodo(-1);
-  else if(a==="next")spostaPeriodo(1);
-  else if(a==="mese"){S.mese=b.dataset.ym;S.per="mese";nascondiTip();renderMain();}
+  else if(a==="mese"){S.mese=b.dataset.ym;S.per="mese";S.lim=150;nascondiTip();renderMain();}
+  else if(a==="anno")scegliAnno(b.dataset.y);
   else if(a==="vai-todo"||a==="vai-todo-tutti"){S.tab="movimenti";S.fcat="da-classificare";S.q="";if(a==="vai-todo-tutti")S.per="tutto";renderAll();}
   else if(a==="vai-cat"||a==="vai-cat-tutto"){S.tab="movimenti";S.fcat=b.dataset.cat;S.q="";if(a==="vai-cat-tutto")S.per="tutto";renderAll();scrollTo({top:0});}
   else if(a==="altri"){S.lim+=150;renderLista();}
