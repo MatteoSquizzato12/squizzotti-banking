@@ -2,8 +2,9 @@
 const L=window.Logica;
 const MESI=["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
 const MESI3=["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
-const CONTANTI="CONTANTI"; // causale dei movimenti in contanti inseriti a mano
-const CAUSALI={"CONTANTI":"Contanti","(2":"Pagamento con carta","VH":"Pagamento POS","TE":"Addebito diretto","U2":"Utenza telefonica","M4":"Bonifico in uscita","W7":"Bonifico istantaneo in uscita","W8":"Bonifico istantaneo in entrata","BP":"Bonifico in entrata","3B":"Bonifico in entrata","B8":"Emolumenti","2U":"Ricarica prepagata","EB":"Commissioni","5E":"Commissioni bonifico","0F":"Commissioni prepagata","2J":"Commissioni prepagata","18":"Competenze e spese","4K":"Imposta di bollo","4Y":"Canone carta","FT":"F24","(0":"Prelievo","F8":"Rimborso"};
+const CONTANTI="CONTANTI"; // causale dei movimenti fuori banca scritti a mano (il nome è rimasto quello della prima versione)
+const nomeExtra=()=>S.conto==="anna"?"Rifle":"Altro"; // nome del pulsante e dell'etichetta: per Anna è "Rifle"
+const CAUSALI={"CONTANTI":"Fuori banca","(2":"Pagamento con carta","VH":"Pagamento POS","TE":"Addebito diretto","U2":"Utenza telefonica","M4":"Bonifico in uscita","W7":"Bonifico istantaneo in uscita","W8":"Bonifico istantaneo in entrata","BP":"Bonifico in entrata","3B":"Bonifico in entrata","B8":"Emolumenti","2U":"Ricarica prepagata","EB":"Commissioni","5E":"Commissioni bonifico","0F":"Commissioni prepagata","2J":"Commissioni prepagata","18":"Competenze e spese","4K":"Imposta di bollo","4Y":"Canone carta","FT":"F24","(0":"Prelievo","F8":"Rimborso"};
 const COME={manuale:"Scelta a mano su questo movimento",regola:"Regola imparata",causale:"Riconosciuta dal codice causale della banca",dizionario:"Riconosciuta dall'elenco degli esercenti",predefinita:"Non riconosciuta"};
 const PROTETTE=["da-classificare","altre-entrate","saldo-iniziale"]; // servono come ripiego o hanno un significato fisso: non si eliminano
 const SALDO="saldo-iniziale"; // soldi portati dal vecchio conto: né entrate né giroconti
@@ -154,7 +155,7 @@ function renderMain(){
   if(on&&ml.scrollWidth>ml.clientWidth)ml.scrollLeft=on.offsetLeft-ml.offsetLeft-(ml.clientWidth-on.offsetWidth)/2;
 }
 function nessunDato(C){
-  return `<div class="card empty"><b>Nessun movimento.</b>Carica il primo XLS di Banca Valsabbina per il conto ${esc(contoNome(S.conto))}.<br><br><button class="btn" data-act="tab" data-tab="importa">Importa XLS</button></div>`;
+  return `<div class="card empty"><b>Nessun movimento.</b>Carica il primo XLS di Banca Valsabbina per il conto ${esc(contoNome(S.conto))}.<br><br><button class="btn" data-act="tab" data-tab="importa">Importa XLS</button>${S.tab==="movimenti"?` <button class="btn ghost" data-act="contanti-nuovo">+ ${nomeExtra()}</button>`:""}</div>`;
 }
 // Mese/Anno + una casella per ogni anno con movimenti e (in modalità Mese) per ogni mese dell'anno scelto.
 function barraPeriodo(conTutto){
@@ -183,10 +184,13 @@ function vPanoramica(C){
   const quota=T.e>0?Math.round(T.r/T.e*100):null;
   let h=barraPeriodo(false);
   if(todo)h+=`<div class="banner"><p><b>${todo} ${todo===1?"movimento":"movimenti"} da classificare</b> in questo periodo. Ogni correzione insegna all'app a riconoscerli da sola.</p><button class="btn small" data-act="vai-todo">Classifica ora</button></div>`;
-  h+=`<div class="kpis">
+  const PV="polizza-vita",pv=C.mov.some(m=>m._c.id===PV||radice(m._c.id)===PV);
+  const pvSomma=ms=>-ms.filter(m=>m._c.id===PV||radice(m._c.id)===PV).reduce((s,m)=>s+m.importo,0);
+  h+=`<div class="kpis${pv?" k4":""}">
     <div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${T.e>0.004?"+":""}${eur(T.e)}</div></div>
     <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${T.u>0.004?"−":""}${eur(T.u)}</div></div>
-    <div class="kpi hero"><div class="k">Risparmio</div><div class="v num">${eurS(T.r)}</div><div class="d">${quota==null?"&nbsp;":quota+"% delle entrate"}${T.inv>0.004?" · "+eur(T.inv)+" investiti":""}</div></div>
+    <div class="kpi hero"><div class="k">Risparmio</div><div class="v num">${eurS(T.r)}</div><div class="d">${quota==null?"&nbsp;":quota+"% delle entrate"}</div></div>
+    ${pv?`<div class="kpi"><div class="k">Polizza vita</div><div class="v num">${eur(pvSomma(ms))}</div><div class="d">${eur(pvSomma(C.mov))} dall'inizio</div></div>`:""}
   </div>`;
   h+=`<div class="card" style="margin-bottom:14px"><div class="card-head"><h2 class="dotted">${S.per==="anno"?"Mesi del "+S.mese.slice(0,4):"Ultimi 12 mesi"}</h2><div class="legend"><span><i class="key in"></i>Entrate</span><span><i class="key out"></i>Uscite</span></div></div>
     <div class="chart" id="chart-mesi"></div>
@@ -260,7 +264,7 @@ function vMovimenti(C){
   const nf=nFiltri(S.filtri);
   return barraPeriodo(true)+`<div class="filters"><input class="input" type="search" id="q" data-input="q" placeholder="Cerca esercente, descrizione, nota, importo…" value="${esc(S.q)}" aria-label="Cerca"></div>
     <div class="mbar"><div class="seg" role="group" aria-label="Entrate o uscite">${[["tutti","Entrambe"],["entrate","Entrate"],["uscite","Uscite"]].map(([k,t])=>`<button data-act="verso" data-v="${k}" aria-pressed="${S.verso===k}">${t}</button>`).join("")}</div>
-    <span class="mbtns"><button class="btn" data-act="contanti-nuovo">+ Contanti</button><button class="btn ghost filtribtn" data-act="filtri">Filtri${nf?`<span class="badge">${nf}</span>`:""}</button></span></div>
+    <span class="mbtns"><button class="btn" data-act="contanti-nuovo">+ ${nomeExtra()}</button><button class="btn ghost filtribtn" data-act="filtri">Filtri${nf?`<span class="badge">${nf}</span>`:""}</button></span></div>
     <div id="attivi"></div><div id="mres"></div>`;
 }
 const nFiltri=f=>f.cats.length+(f.min!==""?1:0)+(f.max!==""?1:0)+(f.nota?1:0)+(f.manuale?1:0);
@@ -318,7 +322,7 @@ function renderLista(){
 function rigaMov(m,C){
   const [,mm,dd]=m.data.split("-"),c=m._c,todo=c.id==="da-classificare";
   return `<button class="mov" data-act="mov" data-id="${m.id}"><span class="dt"><b>${+dd}</b>${MESI3[+mm-1]}</span>
-    <span style="min-width:0"><span class="who" style="display:block">${esc(m._e)}</span><span class="sub">${m.causale===CONTANTI?`<span class="pill cash">contanti</span>`:""}<span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
+    <span style="min-width:0"><span class="who" style="display:block">${esc(m._e)}</span><span class="sub">${m.causale===CONTANTI?`<span class="pill cash">${nomeExtra().toLowerCase()}</span>`:""}<span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
     <span class="amt num${m.importo>0?" pos":""}">${eurS(m.importo)}</span></button>`;
 }
 function chipsCategorie(C,sel){
@@ -373,18 +377,18 @@ async function movAuto(){
   m.categoria=null;prepara(S.conto);chiudi();renderAll();toast("Ora la categoria la decidono le regole.");
 }
 
-/* ---------- contanti ---------- */
-// Entrate e uscite in contanti scritte a mano: stanno nel conto come gli altri movimenti, con causale CONTANTI.
+/* ---------- movimenti fuori banca ("Altro" / "Rifle") ---------- */
+// Entrate e uscite che non passano dalla banca, scritte a mano: stanno nel conto come gli altri movimenti, con causale CONTANTI.
 const oggiISO=()=>{const t=new Date();return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");};
 function sheetContanti(){
   const C=C0(),f=sheet.f,cs=C.cats.filter(c=>c.tipo==="normale"&&c.verso===f.verso);
   const conf=sheet.id&&S.conferma["cash"+sheet.id]&&Date.now()-S.conferma["cash"+sheet.id]<4000;
-  return `<div class="sh-head"><div><div class="eyebrow">Contanti · conto ${esc(contoNome(S.conto))}</div><h2>${sheet.id?"Modifica movimento":"Nuovo movimento"}</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
+  return `<div class="sh-head"><div><div class="eyebrow">${nomeExtra()} · conto ${esc(contoNome(S.conto))} · fuori banca</div><h2>${sheet.id?"Modifica movimento":"Nuovo movimento"}</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
   <div style="display:flex;flex-direction:column;gap:12px">
   <div class="seg" role="group" aria-label="Entrata o uscita">${[["uscita","Uscita"],["entrata","Entrata"]].map(([v,t])=>`<button data-act="c-verso" data-v="${v}" aria-pressed="${f.verso===v}">${t}</button>`).join("")}</div>
   <div style="display:flex;gap:10px;flex-wrap:wrap"><label class="field" style="flex:1 1 140px"><span>Importo (€)</span><input data-sheet="importo" inputmode="decimal" value="${esc(f.importo)}" placeholder="0,00"></label>
   <label class="field" style="flex:1 1 140px"><span>Data</span><input type="date" data-sheet="data" value="${esc(f.data)}" max="${oggiISO()}"></label></div>
-  <label class="field"><span>Descrizione</span><input data-sheet="descr" value="${esc(f.descr)}" maxlength="80" placeholder="${f.verso==="uscita"?"Es. mercato, parcheggio, mancia":"Es. regalo, rimborso amico"}"></label></div>
+  <label class="field"><span>Descrizione</span><input data-sheet="descr" value="${esc(f.descr)}" maxlength="80" placeholder="${f.verso==="uscita"?"Es. spesa pagata in contanti":S.conto==="anna"?"Es. seduta di riflessologia":"Es. regalo, rimborso di un amico"}"></label></div>
   <div class="sec"><h3>Categoria</h3><p class="hint" style="margin-bottom:6px">Facoltativa: se non la scegli, l'app prova a riconoscerla dalla descrizione.</p>
   ${chipsAlbero(cs,(c,sub)=>`<button class="chip${sub?" sub":""}" data-act="c-cat" data-cat="${esc(c.id)}" aria-pressed="${f.cat===c.id}">${esc(c.nome)}</button>`)}</div>
   <div class="sh-foot">${sheet.id?`<button class="btn ${conf?"danger":"ghost"}" data-act="c-elimina">${conf?"Tocca di nuovo per eliminare":"Elimina"}</button>`:""}<span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="c-salva">Salva</button></div>`;
@@ -394,20 +398,20 @@ async function salvaContanti(){
   const C=C0(),f=sheet.f,v=L.numero(f.importo),era=sheet.id;
   if(!v||v<=0){toast("Scrivi un importo valido.");return;}
   if(!/^\d{4}-\d{2}-\d{2}$/.test(f.data||"")){toast("Scegli la data.");return;}
-  const row={data:f.data,valuta:f.data,importo:Math.round((f.verso==="uscita"?-v:v)*100)/100,causale:CONTANTI,descrizione:f.descr.trim()||"Contanti",categoria:f.cat||null};
+  const row={data:f.data,valuta:f.data,importo:Math.round((f.verso==="uscita"?-v:v)*100)/100,causale:CONTANTI,descrizione:f.descr.trim()||nomeExtra(),categoria:f.cat||null};
   let r;
   if(sheet.id)r=await sb.from("movimenti").update(row).eq("id",sheet.id).select("id,data,valuta,importo,causale,descrizione,chiave,categoria,nota,importazione").single();
   else r=await sb.from("movimenti").insert({...row,conto:S.conto,chiave:CONTANTI+"|"+Date.now()+"|"+Math.random().toString(36).slice(2,8)}).select("id,data,valuta,importo,causale,descrizione,chiave,categoria,nota,importazione").single();
   if(r.error)return errore(r.error);
   const m={...r.data,importo:Number(r.data.importo)};
   C.mov=C.mov.filter(x=>x.id!==m.id).concat(m);ordinaMov(C);prepara(S.conto);
-  chiudi();renderAll();toast(`${era?"Modificato":"Aggiunto"}: ${eurS(m.importo)} in contanti, ${giorno(m.data)}.`);
+  chiudi();renderAll();toast(`${era?"Modificato":"Aggiunto"} in ${nomeExtra()}: ${eurS(m.importo)}, ${giorno(m.data)}.`);
 }
 async function eliminaContanti(){
   const k="cash"+sheet.id;
   if(!(S.conferma[k]&&Date.now()-S.conferma[k]<4000)){S.conferma[k]=Date.now();renderSheet();return;}
   const C=C0(),{error}=await sb.from("movimenti").delete().eq("id",sheet.id);if(error)return errore(error);
-  C.mov=C.mov.filter(m=>m.id!==sheet.id);prepara(S.conto);chiudi();renderAll();toast("Movimento in contanti eliminato.");
+  C.mov=C.mov.filter(m=>m.id!==sheet.id);prepara(S.conto);chiudi();renderAll();toast(`Movimento di ${nomeExtra()} eliminato.`);
 }
 
 /* ---------- categorie e regole ---------- */
