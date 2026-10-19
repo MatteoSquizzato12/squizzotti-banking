@@ -131,11 +131,11 @@ function renderConti(){
   $("conti").innerHTML=D.conti.map(c=>{const sub=c.id==="comune"?"Conto in comune":"Conto personale";
     return `<button class="conto" data-act="conto" data-id="${c.id}" aria-pressed="${S.conto===c.id}"><span class="av">${esc(c.nome[0])}</span><span>${esc(c.nome)}<small>${sub}</small></span></button>`;}).join("");
 }
-const ICONE={panoramica:'<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',movimenti:'<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',categorie:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',obiettivi:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',importa:'<path d="M12 15V4M7 9l5-5 5 5M4 20h16"/>'};
+const ICONE={altro:'<path d="M3 7h15a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 7l12-4v4"/><circle cx="16.5" cy="14" r="1.2"/>',panoramica:'<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',movimenti:'<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',categorie:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',obiettivi:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',importa:'<path d="M12 15V4M7 9l5-5 5 5M4 20h16"/>'};
 function renderTabs(){
   const C=C0();
   const n=C?daClassificare(C.mov).length:0;
-  const tabs=[["panoramica","Panoramica"],["movimenti","Movimenti",n],["categorie","Categorie"]];
+  const tabs=[["panoramica","Panoramica"],["movimenti","Movimenti",n],["altro",nomeExtra()],["categorie","Categorie"]];
   if(personale())tabs.push(["obiettivi","Obiettivi"]);
   tabs.push(["importa","Importa"]);
   if(!tabs.some(t=>t[0]===S.tab))S.tab="panoramica";
@@ -148,6 +148,7 @@ function renderMain(){
   else if(S.tab==="movimenti"){el.innerHTML=vMovimenti(C);renderLista();}
   else if(S.tab==="categorie")el.innerHTML=vCategorie(C);
   else if(S.tab==="obiettivi")el.innerHTML=vObiettivi(C);
+  else if(S.tab==="altro")el.innerHTML=vAltro(C);
   else el.innerHTML=S.imp?vAnteprima(C):vImporta(C);
   el.insertAdjacentHTML("beforeend",`<p class="meta" style="text-align:center;margin-top:36px">Accesso come ${esc(user?.email||"")} · <button class="linkbtn" data-act="logout">Log out</button></p>`);
   disegnaGrafici();
@@ -392,6 +393,23 @@ function sheetContanti(){
   <div class="sec"><h3>Categoria</h3><p class="hint" style="margin-bottom:6px">Facoltativa: se non la scegli, l'app prova a riconoscerla dalla descrizione.</p>
   ${chipsAlbero(cs,(c,sub)=>`<button class="chip${sub?" sub":""}" data-act="c-cat" data-cat="${esc(c.id)}" aria-pressed="${f.cat===c.id}">${esc(c.nome)}</button>`)}</div>
   <div class="sh-foot">${sheet.id?`<button class="btn ${conf?"danger":"ghost"}" data-act="c-elimina">${conf?"Tocca di nuovo per eliminare":"Elimina"}</button>`:""}<span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="c-salva">Salva</button></div>`;
+}
+// Scheda "Altro" / "Rifle": solo i movimenti fuori banca scritti a mano, per tenerne traccia.
+function vAltro(C){
+  const nome=nomeExtra(),tutti=C.mov.filter(m=>m.causale===CONTANTI);
+  const p=S.per==="tutto"?"":S.per==="anno"?S.mese.slice(0,4):S.mese,ms=tutti.filter(m=>m.data.startsWith(p));
+  const ent=ms.filter(m=>m.importo>0).reduce((s,m)=>s+m.importo,0),usc=-ms.filter(m=>m.importo<0).reduce((s,m)=>s+m.importo,0);
+  let h=barraPeriodo(true)+`<div class="toolbar"><p class="meta grow">Entrate e uscite fuori banca scritte a mano nel conto ${esc(contoNome(S.conto))}: ${tutti.length} in tutto.</p><button class="btn" data-act="contanti-nuovo">+ ${nome}</button></div>`;
+  if(!ms.length)return h+`<div class="card empty"><b>Nessun movimento.</b>${tutti.length?"In questo periodo non ce ne sono: prova «Tutto».":`Con «+ ${nome}» aggiungi entrate e uscite che non passano dalla banca.`}</div>`;
+  h+=`<div class="kpis"><div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${ent>0.004?"+":""}${eur(ent)}</div></div>
+    <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${usc>0.004?"−":""}${eur(usc)}</div></div>
+    <div class="kpi hero"><div class="k">Saldo ${nome}</div><div class="v num">${eurS(ent-usc)}</div><div class="d">${ms.length} ${ms.length===1?"movimento":"movimenti"}</div></div></div>`;
+  const gr={};for(const m of ms)(gr[m.data.slice(0,7)]??=[]).push(m);
+  for(const k of Object.keys(gr).sort().reverse()){
+    const tk=gr[k].reduce((s,m)=>s+m.importo,0);
+    h+=`<div class="mgroup"><h3>${ymNome(k)} <span class="num">${eurS(tk)}</span></h3><div class="mlist">${gr[k].map(m=>rigaMov(m,C)).join("")}</div></div>`;
+  }
+  return h+`<p class="hint" style="margin-top:12px">I totali qui sopra sono la semplice somma di questi movimenti, compresi quelli di categorie escluse dalla panoramica (polizza vita, saldo iniziale).</p>`;
 }
 const ordinaMov=C=>C.mov.sort((a,b)=>a.data<b.data?1:a.data>b.data?-1:a.id-b.id);
 async function salvaContanti(){

@@ -252,8 +252,9 @@ details.dups summary{cursor:pointer;font-weight:600;padding:6px 0}
   .conto{padding:7px 10px 7px 7px;gap:8px;min-width:0;text-align:left;font-size:14px}
   .conto>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .conto small{overflow:hidden;text-overflow:ellipsis}
-  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0;border:0;border-top:1px solid var(--line);background:var(--surface);display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom,0px));overflow:visible}
-  .tab{flex-direction:column;gap:2px;padding:6px 2px 4px;font-size:11px;font-weight:600;border-bottom:0;border-radius:12px}
+  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0;border:0;border-top:1px solid var(--line);background:var(--surface);display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:0;padding:4px 2px calc(4px + env(safe-area-inset-bottom,0px));overflow:visible}
+  .tab{flex-direction:column;gap:2px;padding:6px 0 4px;font-size:10px;letter-spacing:-.01em;font-weight:600;border-bottom:0;border-radius:12px;min-width:0}
+  .tab .tl{max-width:100%;overflow:hidden;text-overflow:ellipsis}
   .tab .ti{display:block}
   .tab[aria-selected="true"]{color:var(--on-yellow);background:var(--yellow)}
   .tab .count{position:absolute;top:2px;left:calc(50% + 6px);margin:0;min-width:18px;padding:0 5px;font-size:10.5px;background:var(--bad);color:#FFFFFF}
