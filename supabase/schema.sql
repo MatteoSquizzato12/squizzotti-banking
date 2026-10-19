@@ -52,8 +52,10 @@ create table if not exists public.categorie (
   tipo text not null default 'normale' check (tipo in ('normale', 'trasferimento', 'investimento')),
   verso text not null default 'uscita' check (verso in ('uscita', 'entrata')),
   ordine int not null default 0,
+  padre text, -- id della categoria principale, per le sottocategorie (es. benzina → auto)
   primary key (conto, id)
 );
+alter table public.categorie add column if not exists padre text;
 
 -- ---------- Regole che imparano ----------
 -- "se la descrizione contiene <testo> allora categoria <categoria>". Nascono quando correggi una categoria.
@@ -82,6 +84,7 @@ create table if not exists public.importazioni (
 );
 
 -- ---------- Movimenti ----------
+-- causale CONTANTI = entrata/uscita in contanti scritta a mano nell'app (chiave unica, mai uguale a quella di un XLS).
 -- chiave = data contabile | causale | importo | descrizione: serve al controllo dei duplicati.
 -- Non è unica di proposito: due pagamenti identici nello stesso giorno sono entrambi veri.
 -- categoria = solo la scelta fatta a mano su quel movimento (null = decide la regola).

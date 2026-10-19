@@ -270,3 +270,21 @@ details.dups summary{cursor:pointer;font-weight:600;padding:6px 0}
 .badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--yellow);color:var(--on-yellow);font-size:11.5px;font-weight:700;letter-spacing:0}
 .chips.attivi{align-items:center;margin:0 0 10px}
 .chips.attivi .chip{padding:4px 10px;font-size:12.5px}
+
+/* ---------- sottocategorie ---------- */
+.cgruppo{display:flex;flex-wrap:wrap;gap:6px;flex-basis:100%;padding:6px;border-radius:18px;background:var(--chip)}
+.chip.sub{font-size:12.5px;padding:5px 11px}
+.chip.sub::before{content:"↳ ";color:var(--muted)}
+.chip.sub[aria-pressed="true"]::before{color:var(--on-yellow)}
+.crow.sub{padding-left:22px}
+.crow.sub .n{font-weight:500}
+.crow.sub .n::before{content:"↳ ";color:var(--muted)}
+.chev{display:inline-block;width:14px;color:var(--muted)}
+.csub{display:flex;flex-direction:column;gap:2px;margin:0 0 6px 18px;padding-left:10px;border-left:2px solid var(--soft)}
+.csub .linkbtn{align-self:flex-start;margin:4px 8px 2px;font-size:12.5px}
+.cbar.sub .n{font-size:13px}
+.cbar.sub .fill{opacity:.75}
+
+/* ---------- contanti ---------- */
+.mbtns{display:inline-flex;gap:8px}
+.pill.cash{background:var(--soft);color:var(--soft-ink);font-weight:600}

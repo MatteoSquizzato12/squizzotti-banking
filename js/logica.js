@@ -80,6 +80,7 @@ function confronta(movimentiFile,chiaviSalvate){
 const TAGLIA=s=>pulisci(s).replace(/[.\s-]+$/,"");
 function esercente(m){
   const d=pulisci(m.descrizione);
+  if(m.causale==="CONTANTI")return d||"Contanti"; // scritto a mano: la descrizione è già il nome
   let x;
   if((x=d.match(/C\/O\s+(.+?)(?:\s+CARTA\s+N\.|\s+-\s+CIRCUITO|$)/i)))return TAGLIA(x[1]);
   if((x=d.match(/(?:a vs favore|BONIFICO A VOSTRO FAVORE|DISPOSIZIONE VS\. FAVORE|EMOLUMENTI)\s+(.+?)\s+(?:Data Regolamento|Coord|CRO)/i)))return TAGLIA(x[1]);
@@ -98,61 +99,70 @@ function esercente(m){
 const testoRegola=m=>esercente(m).toUpperCase();
 
 /* ---------- categorie predefinite ---------- */
-// [id, nome, tipo, verso]. Il conto comune ha "Versamenti" al posto di "Al conto comune".
+// [id, nome, tipo, verso, padre]. Le sottocategorie hanno un "padre": nei totali confluiscono nella categoria principale.
+// Il conto comune ha "Versamenti di Matteo e Anna" al posto di "Conto comune".
 const BASE=[
-  ["spesa","Spesa alimentare","normale","uscita"],
-  ["ristoranti","Ristoranti e bar","normale","uscita"],
+  ["spesa","Spese alimentari","normale","uscita"],
+  ["ristoranti","Ristoranti","normale","uscita"],
   ["casa","Casa e utenze","normale","uscita"],
-  ["telefono","Telefono e internet","normale","uscita"],
-  ["trasporti","Auto e trasporti","normale","uscita"],
+  ["auto","Auto","normale","uscita"],
+  ["benzina","Benzina","normale","uscita","auto"],
+  ["tagliando-revisione","Tagliando e revisione","normale","uscita","auto"],
+  ["straordinarie-auto","Straordinarie auto","normale","uscita","auto"],
   ["salute","Salute","normale","uscita"],
-  ["sport","Sport e benessere","normale","uscita"],
   ["shopping","Shopping","normale","uscita"],
-  ["svago","Svago e abbonamenti","normale","uscita"],
   ["viaggi","Viaggi","normale","uscita"],
   ["assicurazioni","Assicurazioni","normale","uscita"],
+  ["abbonamenti","Abbonamenti","normale","uscita"],
   ["tasse","Tasse e F24","normale","uscita"],
   ["banca","Commissioni e bolli","normale","uscita"],
   ["contanti","Prelievi contanti","normale","uscita"],
   ["prepagata","Ricarica prepagata","normale","uscita"],
   ["regali","Regali e famiglia","normale","uscita"],
-  ["altre-uscite","Altre uscite","normale","uscita"],
+  ["conto-comune","Conto comune","normale","uscita"],
+  ["commercialista","Commercialista","normale","uscita"],
   ["da-classificare","Da classificare","normale","uscita"],
   ["stipendio","Stipendio e compensi","normale","entrata"],
+  ["versamenti","Versamenti di Matteo e Anna","normale","entrata"],
   ["rimborsi","Rimborsi","normale","entrata"],
   ["altre-entrate","Altre entrate","normale","entrata"],
   ["giroconti","Giroconti tra conti propri","trasferimento","uscita"],
   ["investimenti","Investimenti","investimento","uscita"],
+  ["polizza-vita","Polizza vita","investimento","uscita"],
   ["saldo-iniziale","Saldo iniziale (dal vecchio conto)","trasferimento","entrata"]
 ];
 function categoriePredefinite(conto){
-  const l=BASE.slice();
-  if(conto==="comune")l.splice(18,0,["versamenti","Versamenti di Matteo e Anna","normale","entrata"]);
-  else l.splice(16,0,["conto-comune","Al conto comune","normale","uscita"]);
-  return l.map(([id,nome,tipo,verso],i)=>({conto,id,nome,tipo,verso,ordine:i}));
+  return BASE.filter(([id])=>conto==="comune"?id!=="conto-comune":id!=="versamenti")
+    .map(([id,nome,tipo,verso,padre],i)=>({conto,id,nome,tipo,verso,padre:padre||null,ordine:i}));
 }
+// Prima versione delle categorie (19/10/2026): categoria vecchia → nuova, per aggiornare movimenti e regole.
+const MIGRAZIONE_V2={"telefono":"casa","trasporti":"auto","sport":"shopping","svago":"abbonamenti","altre-uscite":"da-classificare"};
 
 /* ---------- classificazione ---------- */
 // 1) scelta a mano sul movimento  2) regole imparate (la più lunga vince)  3) causale della banca
 // 4) dizionario di esercenti italiani  5) "Da classificare" (uscite) o "Altre entrate" (entrate).
+// Nel dizionario si prova la prima categoria esistente della lista (es. "benzina", se è stata eliminata "auto").
 const CAUSALI={"EB":"banca","5E":"banca","0F":"banca","2J":"banca","18":"banca","4Y":"banca","4K":"banca","2U":"prepagata","FT":"tasse","(0":"contanti","B8":"stipendio"};
 const DIZIONARIO=[
-  ["giroconti-auto",/\bGIROCONTO\b/],
-  ["spesa",/\b(ESSELUNGA|CONAD|COOP|CARREFOUR|LIDL|EUROSPIN|IPER\b|IPERCOOP|FAMILA|PAM\b|DESPAR|INTERSPAR|EUROSPAR|SPAR\b|MD\s+S\.?P\.?A|ALDI|PENNY|BENNET|TIGROS|SIGMA|CRAI|TODIS|IN'S|SUPERMERCAT|ALIMENTARI|MACELLERIA|PANIFICIO|PANETTERIA|FORNO|FRUTTA|ORTOFRUTTA|PESCHERIA|GASTRONOMIA|SALUMERIA|CASEIFICIO|MERCATO)/],
-  ["ristoranti",/\b(MC ?DONALD|BURGER ?KING|KFC|RISTORANT|PIZZ|TRATTORIA|OSTERIA|LOCANDA|AGRITURISMO|BAR\b|CAFF|CAFE\b|CREMERIA|GELAT|PASTICCERIA|SUSHI|KEBAB|BIRRERIA|PUB\b|ENOTECA|TAVOLA CALDA|ROSTICCERIA|DELIVEROO|JUST ?EAT|GLOVO|AUTOGRILL|CHEF EXPRESS|STARBUCKS|BISTROT)/],
-  ["casa",/\b(A2A|ENEL\b|ENEL ENERGIA|HERA\b|IREN\b|EDISON|PLENITUDE|SORGENIA|ACEA\b|ACQUA\b(?! ?& ?SAPONE)|GAS\b|CONDOMINI|AFFITTO|IKEA|LEROY MERLIN|BRICO|OBI\b|TECNOMAT|FERRAMENTA|MAISONS DU MONDE|JYSK|MONDO CONVENIENZA)/],
-  ["telefono",/\b(TELECOM ?ITALIA|TIM\b|VODAFONE|WIND ?TRE|WINDTRE|ILIAD|FASTWEB|HO\.? ?MOBILE|VERY MOBILE|KENA|POSTEMOBILE|SKY WIFI|TISCALI|EOLO)/],
-  ["trasporti",/\b(ENI\b|ENILIVE|Q8|IP\b|TAMOIL|ESSO|AGIP|API\b|CARBURANT|DISTRIBUTORE|STAZIONE DI SERVIZIO|AUTOSTRAD|TELEPASS|TRENITALIA|TRENORD|ITALO|ATM\b|BRESCIA MOBILITA|PARCHEGG|EASYPARK|TELEPARK|UBER|FREE ?NOW|TAXI|OFFICINA|GOMMIST|CARROZZERIA|AUTOLAVAGGIO|REVISIONE|BOLLO AUTO|ACI\b)/],
-  ["salute",/\b(FARMACI|PARAFARMACI|STUDIO DOTT|DOTT\.|DOTTOR|MEDIC|OSPEDAL|POLIAMBULATORI|ATS\b|ASST\b|TICKET|DENTIST|ODONTOIATR|OTTIC|ANALISI|LABORATORIO|SANITARI|CLINICA|FISIOTERAP)/],
-  ["sport",/\b(DECATHLON|PALESTRA|FITNESS|PISCINA|SPORT\b|GYM|CROSSFIT|YOGA|PILATES|PADEL|TENNIS|CENTRO BENESSERE|PARRUCCHIER|BARBIER|ESTETIC)/],
-  ["shopping",/\b(AMAZON|AMZN|ZALANDO|MEDIAWORLD|MEDIA WORLD|UNIEURO|EURONICS|EXPERT\b|H ?& ?M|ZARA|PRIMARK|OVS|OVIESSE|BERSHKA|PULL ?& ?BEAR|STRADIVARIUS|CALZEDONIA|INTIMISSIMI|TEZENIS|DOUGLAS|SEPHORA|ACQUA ?& ?SAPONE|TIGOTA|PIUMA|KIKO|FELTRINELLI|MONDADORI|LIBRERIA|EBAY|SHEIN|TEMU|ALIEXPRESS|VINTED|PAYPAL|ORIGINS|CENTRO COMMERCIALE|OUTLET)/],
-  ["svago",/\b(NETFLIX|SPOTIFY|DISNEY|PRIME VIDEO|AMAZON PRIME|DAZN|SKY\b|NOW TV|APPLE\.COM|ITUNES|GOOGLE|YOUTUBE|PLAYSTATION|STEAM|NINTENDO|CINEMA|UCI\b|THE SPACE|TEATRO|MUSEO|TICKETONE|VIVATICKET|CONCERT|CLAUDE|ANTHROPIC|OPENAI|CHATGPT|MICROSOFT|AUDIBLE)/],
-  ["viaggi",/\b(BOOKING|AIRBNB|EXPEDIA|RYANAIR|EASYJET|WIZZ|ITA AIRWAYS|VOLOTEA|VUELING|LUFTHANSA|HOTEL|ALBERGO|B ?& ?B|RESIDENCE|CAMPEGGIO|CAMPING|AEROPORTO|FLIXBUS|MOBY|TIRRENIA|GRIMALDI)/],
-  ["assicurazioni",/\b(GAMALIFE|ASSICURA|GENERALI|ALLIANZ|UNIPOL|AXA\b|ZURICH|REALE MUTUA|CATTOLICA|POSTE ?VITA|VITTORIA|LINEAR|PRIMA ASSICURAZIONI|GENIALLOYD|VERTI|HELVETIA|GROUPAMA)/],
-  ["tasse",/\b(F24|AGENZIA DELLE ENTRATE|DELEGHE|PAGOPA|PAGO PA|TARI\b|IMU\b|COMUNE DI|MULTA|SANZIONE)/],
-  ["investimenti",/\b(DIRECTA|FINECO|MOGNEY|MONEYFARM|SCALABLE|TRADE REPUBLIC|DEGIRO|XTB|ETORO|BUX\b|FONDO PENSIONE|PREVIDENZA COMPLEMENTARE|PAC\b|ETF\b|TITOLI|SOTTOSCRIZIONE)/],
-  ["contanti",/\bPRELIEV/],
-  ["rimborsi",/\b(RIMBORSO|STORNO|RESO)\b/]
+  [["giroconti-auto"],/\bGIROCONTO\b/],
+  [["spesa"],/\b(ESSELUNGA|CONAD|COOP|CARREFOUR|LIDL|EUROSPIN|IPER\b|IPERCOOP|FAMILA|PAM\b|DESPAR|INTERSPAR|EUROSPAR|SPAR\b|MD\s+S\.?P\.?A|ALDI|PENNY|BENNET|TIGROS|SIGMA|CRAI|TODIS|IN'S|SUPERMERCAT|ALIMENTARI|MACELLERIA|PANIFICIO|PANETTERIA|FORNO|FRUTTA|ORTOFRUTTA|PESCHERIA|GASTRONOMIA|SALUMERIA|CASEIFICIO|MERCATO)/],
+  [["ristoranti"],/\b(MC ?DONALD|BURGER ?KING|KFC|RISTORANT|PIZZ|TRATTORIA|OSTERIA|LOCANDA|AGRITURISMO|BAR\b|CAFF|CAFE\b|CREMERIA|GELAT|PASTICCERIA|SUSHI|KEBAB|BIRRERIA|PUB\b|ENOTECA|TAVOLA CALDA|ROSTICCERIA|DELIVEROO|JUST ?EAT|GLOVO|AUTOGRILL|CHEF EXPRESS|STARBUCKS|BISTROT)/],
+  [["casa"],/\b(A2A|ENEL\b|ENEL ENERGIA|HERA\b|IREN\b|EDISON|PLENITUDE|SORGENIA|ACEA\b|ACQUA\b(?! ?& ?SAPONE)|GAS\b|CONDOMINI|AFFITTO|IKEA|LEROY MERLIN|BRICO|OBI\b|TECNOMAT|FERRAMENTA|MAISONS DU MONDE|JYSK|MONDO CONVENIENZA|TELECOM ?ITALIA|TIM\b|VODAFONE|WIND ?TRE|WINDTRE|ILIAD|FASTWEB|HO\.? ?MOBILE|VERY MOBILE|KENA|POSTEMOBILE|SKY WIFI|TISCALI|EOLO)/],
+  [["benzina","auto"],/\b(ENI\b|ENILIVE|Q8|IP\b|TAMOIL|ESSO|AGIP|API\b|CARBURANT|DISTRIBUTORE|STAZIONE DI SERVIZIO|STAZ\.? SERV)/],
+  [["tagliando-revisione","auto"],/\b(OFFICINA|AUTOFFICINA|GOMMIST|PNEUMATIC|REVISIONE|TAGLIANDO|MOTORIZZAZIONE)/],
+  [["straordinarie-auto","auto"],/\b(CARROZZERIA|SOCCORSO STRADALE|CARRO ATTREZZI|AUTORICAMBI|RICAMBI AUTO)/],
+  [["auto"],/\b(AUTOSTRAD|TELEPASS|PARCHEGG|EASYPARK|TELEPARK|AUTOLAVAGGIO|BOLLO AUTO|ACI\b)/],
+  [["viaggi"],/\b(TRENITALIA|TRENORD|ITALO|ATM\b|BRESCIA MOBILITA|UBER|FREE ?NOW|TAXI|BOOKING|AIRBNB|EXPEDIA|RYANAIR|EASYJET|WIZZ|ITA AIRWAYS|VOLOTEA|VUELING|LUFTHANSA|HOTEL|ALBERGO|B ?& ?B|RESIDENCE|CAMPEGGIO|CAMPING|AEROPORTO|FLIXBUS|MOBY|TIRRENIA|GRIMALDI)/],
+  [["salute"],/\b(FARMACI|PARAFARMACI|STUDIO DOTT|DOTT\.|DOTTOR|MEDIC|OSPEDAL|POLIAMBULATORI|ATS\b|ASST\b|TICKET|DENTIST|ODONTOIATR|OTTIC|ANALISI|LABORATORIO|SANITARI|CLINICA|FISIOTERAP)/],
+  [["abbonamenti"],/\b(NETFLIX|SPOTIFY|DISNEY|PRIME VIDEO|AMAZON PRIME|DAZN|SKY\b|NOW TV|APPLE\.COM|ITUNES|GOOGLE|YOUTUBE|PLAYSTATION|AUDIBLE|CLAUDE|ANTHROPIC|OPENAI|CHATGPT|MICROSOFT|PALESTRA|FITNESS|PISCINA|GYM|CROSSFIT|YOGA|PILATES)/],
+  [["shopping"],/\b(AMAZON|AMZN|ZALANDO|MEDIAWORLD|MEDIA WORLD|UNIEURO|EURONICS|EXPERT\b|H ?& ?M|ZARA|PRIMARK|OVS|OVIESSE|BERSHKA|PULL ?& ?BEAR|STRADIVARIUS|CALZEDONIA|INTIMISSIMI|TEZENIS|DOUGLAS|SEPHORA|ACQUA ?& ?SAPONE|TIGOTA|PIUMA|KIKO|FELTRINELLI|MONDADORI|LIBRERIA|EBAY|SHEIN|TEMU|ALIEXPRESS|VINTED|PAYPAL|ORIGINS|CENTRO COMMERCIALE|OUTLET|DECATHLON|CISALFA|PARRUCCHIER|BARBIER|ESTETIC)/],
+  [["polizza-vita","assicurazioni"],/\b(GAMALIFE|POLIZZA VITA)/],
+  [["assicurazioni"],/\b(ASSICURA|GENERALI|ALLIANZ|UNIPOL|AXA\b|ZURICH|REALE MUTUA|CATTOLICA|POSTE ?VITA|VITTORIA|LINEAR|PRIMA ASSICURAZIONI|GENIALLOYD|VERTI|HELVETIA|GROUPAMA)/],
+  [["commercialista"],/\b(COMMERCIALIST|STUDIO COMMERCIALE|CONSULENTE DEL LAVORO|CONSULTING|CAF\b|PATRONATO)/],
+  [["tasse"],/\b(F24|AGENZIA DELLE ENTRATE|DELEGHE|PAGOPA|PAGO PA|TARI\b|IMU\b|COMUNE DI|MULTA|SANZIONE)/],
+  [["investimenti"],/\b(DIRECTA|FINECO|MOGNEY|MONEYFARM|SCALABLE|TRADE REPUBLIC|DEGIRO|XTB|ETORO|BUX\b|FONDO PENSIONE|PREVIDENZA COMPLEMENTARE|PAC\b|ETF\b|TITOLI|SOTTOSCRIZIONE)/],
+  [["contanti"],/\bPRELIEV/],
+  [["rimborsi"],/\b(RIMBORSO|STORNO|RESO)\b/]
 ];
 function norm(s){return pulisci(s).toUpperCase();}
 
@@ -168,15 +178,16 @@ function classifica(m,ctx){
   const entrata=m.importo>0;
   const c=CAUSALI[m.causale];
   if(c&&ok(c)&&(c!=="banca"||!entrata))return {id:c,come:"causale"};
-  for(const [id,re] of DIZIONARIO){
+  for(const [lista,re] of DIZIONARIO){
     if(!re.test(d))continue;
-    if(id==="giroconti-auto"){
+    if(lista[0]==="giroconti-auto"){
       const g=conto==="comune"?(entrata?"versamenti":"giroconti"):(entrata?"giroconti":"conto-comune");
       if(ok(g))return {id:g,come:"dizionario"};
       continue;
     }
-    if(entrata&&!["rimborsi","investimenti","altre-entrate"].includes(id))continue; // un'entrata da un supermercato è un rimborso, non una spesa
-    if(ok(id))return {id,come:"dizionario"};
+    if(entrata&&!["rimborsi","investimenti","altre-entrate"].includes(lista[0]))continue; // un'entrata da un supermercato è un rimborso, non una spesa
+    const id=lista.find(ok);
+    if(id)return {id,come:"dizionario"};
   }
   if(entrata){
     if(/\b(EMOLUMENT|STIPENDI|COMPENS|PARCELL|FATTURA)/.test(d)&&ok("stipendio"))return {id:"stipendio",come:"dizionario"};
@@ -186,6 +197,6 @@ function classifica(m,ctx){
   return {id:ok("da-classificare")||cats.find(x=>x.verso==="uscita")?.id||null,come:"predefinita"};
 }
 
-const api={dataISO,numero,leggiRighe,leggiXLS,chiave,confronta,esercente,testoRegola,categoriePredefinite,classifica,norm};
+const api={dataISO,numero,leggiRighe,leggiXLS,chiave,confronta,esercente,testoRegola,categoriePredefinite,MIGRAZIONE_V2,classifica,norm};
 if(typeof module!=="undefined"&&module.exports)module.exports=api; else root.Logica=api;
 })(typeof window!=="undefined"?window:globalThis);

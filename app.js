@@ -2,7 +2,8 @@
 const L=window.Logica;
 const MESI=["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
 const MESI3=["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
-const CAUSALI={"(2":"Pagamento con carta","VH":"Pagamento POS","TE":"Addebito diretto","U2":"Utenza telefonica","M4":"Bonifico in uscita","W7":"Bonifico istantaneo in uscita","W8":"Bonifico istantaneo in entrata","BP":"Bonifico in entrata","3B":"Bonifico in entrata","B8":"Emolumenti","2U":"Ricarica prepagata","EB":"Commissioni","5E":"Commissioni bonifico","0F":"Commissioni prepagata","2J":"Commissioni prepagata","18":"Competenze e spese","4K":"Imposta di bollo","4Y":"Canone carta","FT":"F24","(0":"Prelievo","F8":"Rimborso"};
+const CONTANTI="CONTANTI"; // causale dei movimenti in contanti inseriti a mano
+const CAUSALI={"CONTANTI":"Contanti","(2":"Pagamento con carta","VH":"Pagamento POS","TE":"Addebito diretto","U2":"Utenza telefonica","M4":"Bonifico in uscita","W7":"Bonifico istantaneo in uscita","W8":"Bonifico istantaneo in entrata","BP":"Bonifico in entrata","3B":"Bonifico in entrata","B8":"Emolumenti","2U":"Ricarica prepagata","EB":"Commissioni","5E":"Commissioni bonifico","0F":"Commissioni prepagata","2J":"Commissioni prepagata","18":"Competenze e spese","4K":"Imposta di bollo","4Y":"Canone carta","FT":"F24","(0":"Prelievo","F8":"Rimborso"};
 const COME={manuale:"Scelta a mano su questo movimento",regola:"Regola imparata",causale:"Riconosciuta dal codice causale della banca",dizionario:"Riconosciuta dall'elenco degli esercenti",predefinita:"Non riconosciuta"};
 const PROTETTE=["da-classificare","altre-entrate","saldo-iniziale"]; // servono come ripiego o hanno un significato fisso: non si eliminano
 const SALDO="saldo-iniziale"; // soldi portati dal vecchio conto: né entrate né giroconti
@@ -26,7 +27,7 @@ function setPref(k,v){try{localStorage.setItem("bank:"+k,v);}catch(e){}}
 
 const sb=supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});
 let user=null,persona=null,chan=null;
-const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",filtri:filtriVuoti(),lim:150,imp:null,conferma:{},msg:"Carico i conti…"};
+const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",aperte:new Set(),filtri:filtriVuoti(),lim:150,imp:null,conferma:{},msg:"Carico i conti…"};
 const D={conti:[],c:{}}; // c[conto] = {mov, cats, regole, imps, obi, mesi}
 let sheet=null;
 
@@ -41,27 +42,54 @@ async function caricaConto(id){
   const q=t=>sb.from(t).select("*").eq("conto",id);
   const [cats,reg,imps,obi]=await Promise.all([q("categorie").order("ordine"),q("regole").order("creato"),q("importazioni").order("caricato",{ascending:false}),q("obiettivi").order("creato")]);
   for(const r of [cats,reg,imps,obi])if(r.error)throw r.error;
+  let regole=reg.data;
+  const mig=await migraCategorie(id,cats.data);
+  if(mig){cats.data=mig;const r=await q("regole").order("creato");if(!r.error)regole=r.data;}
   const mov=await tutte(()=>sb.from("movimenti").select("id,data,valuta,importo,causale,descrizione,chiave,categoria,nota,importazione").eq("conto",id).order("data",{ascending:false}).order("id"));
   let categorie=cats.data;
   if(!categorie.length){ // primo accesso al conto: categorie predefinite
     categorie=L.categoriePredefinite(id);
-    const {error}=await sb.from("categorie").upsert(categorie,{onConflict:"conto,id",ignoreDuplicates:true});
+    const {error}=await salvaCategorie(categorie);
     if(error)throw error;
   }
   if(!categorie.some(c=>c.id===SALDO)){
     const c=L.categoriePredefinite(id).find(c=>c.id===SALDO);
-    const {error}=await sb.from("categorie").upsert(c,{onConflict:"conto,id",ignoreDuplicates:true});
+    const {error}=await salvaCategorie([c]);
     if(!error)categorie=categorie.concat(c);
   }
   mov.forEach(m=>m.importo=Number(m.importo));
-  D.c[id]={mov,cats:categorie,regole:reg.data,imps:imps.data,obi:obi.data.map(o=>({...o,importo:Number(o.importo)}))};
+  D.c[id]={mov,cats:categorie,regole,imps:imps.data,obi:obi.data.map(o=>({...o,importo:Number(o.importo)}))};
   prepara(id);
+}
+// Finché nel database manca la colonna "padre" (supabase/schema.sql non rieseguito) le categorie si salvano senza.
+async function salvaCategorie(rows){
+  let r=await sb.from("categorie").upsert(rows,{onConflict:"conto,id",ignoreDuplicates:true});
+  if(r.error&&/padre/i.test(r.error.message||"")){rows.forEach(c=>delete c.padre);r=await sb.from("categorie").upsert(rows,{onConflict:"conto,id",ignoreDuplicates:true});}
+  return r;
+}
+// Categorie v2 (19/10/2026): meno categorie, Auto con sottocategorie. Vale una volta sola, per i conti che hanno
+// ancora le categorie della prima versione. Le categorie create a mano restano; movimenti e regole seguono le nuove.
+async function migraCategorie(id,cats){
+  const M=L.MIGRAZIONE_V2;
+  if(!cats.length||cats.some(c=>c.id==="auto")||!cats.some(c=>c.id in M))return null;
+  let r=await sb.from("categorie").upsert(L.categoriePredefinite(id),{onConflict:"conto,id"});
+  if(r.error){console.warn("Categorie non aggiornate:",r.error.message);return null;} // es. manca la colonna "padre"
+  for(const [da,a] of Object.entries(M)){
+    if(!cats.some(c=>c.id===da))continue;
+    await sb.from("movimenti").update({categoria:a}).eq("conto",id).eq("categoria",da);
+    await sb.from("regole").update({categoria:a}).eq("conto",id).eq("categoria",da);
+  }
+  await sb.from("categorie").delete().eq("conto",id).in("id",Object.keys(M));
+  r=await sb.from("categorie").select("*").eq("conto",id).order("ordine");
+  return r.error?null:r.data;
 }
 // Ricalcola categoria, esercente e totali mensili (dopo ogni modifica a regole, categorie o movimenti).
 function prepara(id){
   const C=D.c[id];if(!C)return;
   C.cats.sort((a,b)=>a.ordine-b.ordine||a.nome.localeCompare(b.nome,"it"));
   C.byId=Object.fromEntries(C.cats.map(c=>[c.id,c]));
+  for(const c of C.cats)if(c.padre&&!C.byId[c.padre])c.padre=null; // categoria principale eliminata altrove
+  C.cats=C.cats.filter(c=>!c.padre).flatMap(c=>[c,...C.cats.filter(x=>x.padre===c.id)]); // ogni sottocategoria subito dopo la sua principale
   const ctx={conto:id,cats:C.cats,regole:C.regole,ids:new Set(C.cats.map(c=>c.id))};
   for(const m of C.mov){m._c=L.classifica(m,ctx);m._e=L.esercente(m);}
   C.mesi={};
@@ -84,7 +112,15 @@ const visibili=()=>{const C=C0();if(!C)return [];
   const p=S.per==="anno"?S.mese.slice(0,4):S.mese;return C.mov.filter(m=>m.data.startsWith(p));};
 function totPeriodo(){const C=C0();if(S.per==="mese")return C.tot[S.mese]||totali([],C);return totali(visibili(),C);}
 const daClassificare=ms=>ms.filter(m=>m._c.id==="da-classificare");
-const nomeCat=id=>C0()?.byId[id]?.nome||"Senza categoria";
+const nomeCat=id=>{const B=C0()?.byId||{},c=B[id];if(!c)return "Senza categoria";return c.padre&&B[c.padre]?B[c.padre].nome+" · "+c.nome:c.nome;};
+const radice=id=>C0()?.byId[id]?.padre||id;
+const figli=id=>(C0()?.cats||[]).filter(c=>c.padre===id);
+// Chip delle categorie ad albero: una categoria con sottocategorie sta in un riquadro insieme a loro.
+function chipsAlbero(cs,chip){
+  const ids=new Set(cs.map(c=>c.id));
+  return `<div class="chips">${cs.filter(c=>!c.padre||!ids.has(c.padre)).map(c=>{const fs=cs.filter(x=>x.padre===c.id);
+    return fs.length?`<div class="cgruppo">${chip(c,false)}${fs.map(x=>chip(x,true)).join("")}</div>`:chip(c,false);}).join("")}</div>`;
+}
 const contoNome=id=>D.conti.find(c=>c.id===id)?.nome||id;
 const personale=()=>S.conto&&S.conto!=="comune";
 
@@ -150,13 +186,15 @@ function vPanoramica(C){
   h+=`<div class="kpis">
     <div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${T.e>0.004?"+":""}${eur(T.e)}</div></div>
     <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${T.u>0.004?"−":""}${eur(T.u)}</div></div>
-    <div class="kpi hero"><div class="k">Risparmio</div><div class="v num">${eurS(T.r)}</div><div class="d">${quota==null?"&nbsp;":quota+"% delle entrate"}</div></div>
+    <div class="kpi hero"><div class="k">Risparmio</div><div class="v num">${eurS(T.r)}</div><div class="d">${quota==null?"&nbsp;":quota+"% delle entrate"}${T.inv>0.004?" · "+eur(T.inv)+" investiti":""}</div></div>
   </div>`;
   h+=`<div class="card" style="margin-bottom:14px"><div class="card-head"><h2 class="dotted">${S.per==="anno"?"Mesi del "+S.mese.slice(0,4):"Ultimi 12 mesi"}</h2><div class="legend"><span><i class="key in"></i>Entrate</span><span><i class="key out"></i>Uscite</span></div></div>
     <div class="chart" id="chart-mesi"></div>
     <details class="numbers"><summary>Vedi i numeri</summary>${tabellaMesi(C)}</details></div>`;
+  const agg={};
+  for(const [id,v] of Object.entries(T.net)){const r=radice(id),a=agg[r]??={v:0,f:{}};a.v+=v;a.f[id]=(a.f[id]||0)+v;}
   const usc=[],ent=[];
-  for(const [id,v] of Object.entries(T.net))(v<0?usc:ent).push([id,Math.abs(v)]);
+  for(const [id,a] of Object.entries(agg))if(Math.abs(a.v)>0.004)(a.v<0?usc:ent).push([id,Math.abs(a.v),a.f]);
   usc.sort((a,b)=>b[1]-a[1]);ent.sort((a,b)=>b[1]-a[1]);
   h+=`<div class="grid g2">
     <div class="card"><div class="card-head"><h2 class="dotted">Uscite per categoria</h2><p class="meta">tocca per vedere i movimenti</p></div>${barreCat(usc,T.u,"out")}</div>
@@ -165,12 +203,24 @@ function vPanoramica(C){
   </div>`;
   return h;
 }
+// Una barra per categoria principale. Se ha sottocategorie si apre e mostra il dettaglio.
 function barreCat(rows,tot,cls){
   if(!rows.length)return `<p class="meta">Nessun movimento in questo periodo.</p>`;
-  const max=rows[0][1]||1;
-  return `<div class="cbars">${rows.map(([id,v])=>`<button class="cbar ${cls}" data-act="vai-cat" data-cat="${esc(id)}" title="${esc(nomeCat(id))}: ${eur(v)}">
-    <span class="n">${esc(nomeCat(id))}</span><span class="a num">${eur(v)}<span class="p">${tot?Math.round(v/tot*100):0}%</span></span>
-    <span class="track"><span class="fill" style="width:${(v/max*100).toFixed(1)}%"></span></span></button>`).join("")}</div>`;
+  const max=rows[0][1]||1,segno=cls==="out"?-1:1;
+  const barra=(id,v,nome,extra,act)=>`<button class="cbar ${cls}${extra||""}" data-act="${act||"vai-cat"}" data-cat="${esc(id)}" title="${esc(nome)}: ${eur(v)}">
+    <span class="n">${nome}</span><span class="a num">${eur(v)}<span class="p">${tot?Math.round(v/tot*100):0}%</span></span>
+    <span class="track"><span class="fill" style="width:${(v/max*100).toFixed(1)}%"></span></span></button>`;
+  return `<div class="cbars">${rows.map(([id,v,f])=>{
+    if(!figli(id).length)return barra(id,v,esc(nomeCat(id)));
+    const aperta=S.aperte.has(id);
+    let h=barra(id,v,`<span class="chev" aria-hidden="true">${aperta?"▾":"▸"}</span>${esc(nomeCat(id))}`,aperta?" aperta":"","apri-cat").replace("<button ",`<button aria-expanded="${aperta}" `);
+    if(aperta){
+      const sub=Object.entries(f).map(([k,x])=>[k,x*segno]).filter(([,x])=>x>0.004).sort((a,b)=>b[1]-a[1]);
+      h+=`<div class="csub">${sub.map(([k,x])=>barra(k,x,esc(k===id?"Senza sottocategoria":C0().byId[k].nome)," sub")).join("")}
+        <button class="linkbtn" data-act="vai-cat" data-cat="${esc(id)}">Tutti i movimenti ${esc(nomeCat(id))}</button></div>`;
+    }
+    return h;
+  }).join("")}</div>`;
 }
 function mesiGrafico(){return S.per==="anno"?mesiTra(S.mese.slice(0,4)+"-01",S.mese.slice(0,4)+"-12"):mesiTra(ymAdd(S.mese,-11),S.mese);}
 function tabellaMesi(C){
@@ -210,7 +260,7 @@ function vMovimenti(C){
   const nf=nFiltri(S.filtri);
   return barraPeriodo(true)+`<div class="filters"><input class="input" type="search" id="q" data-input="q" placeholder="Cerca esercente, descrizione, nota, importo…" value="${esc(S.q)}" aria-label="Cerca"></div>
     <div class="mbar"><div class="seg" role="group" aria-label="Entrate o uscite">${[["tutti","Entrambe"],["entrate","Entrate"],["uscite","Uscite"]].map(([k,t])=>`<button data-act="verso" data-v="${k}" aria-pressed="${S.verso===k}">${t}</button>`).join("")}</div>
-    <button class="btn ghost filtribtn" data-act="filtri">Filtri${nf?`<span class="badge">${nf}</span>`:""}</button></div>
+    <span class="mbtns"><button class="btn" data-act="contanti-nuovo">+ Contanti</button><button class="btn ghost filtribtn" data-act="filtri">Filtri${nf?`<span class="badge">${nf}</span>`:""}</button></span></div>
     <div id="attivi"></div><div id="mres"></div>`;
 }
 const nFiltri=f=>f.cats.length+(f.min!==""?1:0)+(f.max!==""?1:0)+(f.nota?1:0)+(f.manuale?1:0);
@@ -218,7 +268,7 @@ const nFiltri=f=>f.cats.length+(f.min!==""?1:0)+(f.max!==""?1:0)+(f.nota?1:0)+(f
 function filtrati(f=S.filtri){
   let ms=visibili();
   if(S.verso==="entrate")ms=ms.filter(m=>m.importo>0); else if(S.verso==="uscite")ms=ms.filter(m=>m.importo<0);
-  if(f.cats.length){const set=new Set(f.cats);ms=ms.filter(m=>set.has(m._c.id));}
+  if(f.cats.length){const set=new Set(f.cats.flatMap(id=>[id,...figli(id).map(c=>c.id)]));ms=ms.filter(m=>set.has(m._c.id));}
   const mn=L.numero(f.min),mx=L.numero(f.max);
   if(mn!=null)ms=ms.filter(m=>Math.abs(m.importo)>=mn);
   if(mx!=null)ms=ms.filter(m=>Math.abs(m.importo)<=mx);
@@ -245,7 +295,7 @@ function sheetFiltri(){
   const tog=(k,t)=>`<button class="chip" data-act="f-tog" data-k="${k}" aria-pressed="${!!f[k]}">${t}</button>`;
   return `<div class="sh-head"><div><div class="eyebrow">Movimenti · ${S.per==="tutto"?"tutti i periodi":S.per==="anno"?S.mese.slice(0,4):ymNome(S.mese)}</div><h2>Filtri</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
   <div class="sec" style="border-top:0;margin-top:0;padding-top:0"><h3>Categorie</h3><p class="hint">Tocca una o più categorie. Nessuna selezionata = tutte.</p>
-  ${gr.map(([t,fn])=>{const cs=C.cats.filter(fn);return cs.length?`<p class="hint" style="margin:10px 0 6px">${t}</p><div class="chips">${cs.map(c=>`<button class="chip" data-act="f-cat" data-cat="${esc(c.id)}" aria-pressed="${set.has(c.id)}">${esc(c.nome)}</button>`).join("")}</div>`:"";}).join("")}</div>
+  ${gr.map(([t,fn])=>{const cs=C.cats.filter(fn);return cs.length?`<p class="hint" style="margin:10px 0 6px">${t}</p>${chipsAlbero(cs,(c,sub)=>`<button class="chip${sub?" sub":""}" data-act="f-cat" data-cat="${esc(c.id)}" aria-pressed="${set.has(c.id)}">${esc(c.nome)}</button>`)}`:"";}).join("")}</div>
   <div class="sec"><h3>Importo</h3><div style="display:flex;gap:10px"><label class="field" style="flex:1"><span>Da (€)</span><input data-filtro="min" inputmode="decimal" value="${esc(f.min)}" placeholder="0"></label><label class="field" style="flex:1"><span>A (€)</span><input data-filtro="max" inputmode="decimal" value="${esc(f.max)}" placeholder="nessun limite"></label></div><p class="hint" style="margin-top:6px">Vale per entrate e uscite (importo senza segno).</p></div>
   <div class="sec"><h3>Altro</h3><div class="chips">${tog("nota","Con nota")}${tog("manuale","Categoria scelta a mano")}</div></div>
   <div class="sh-foot"><button class="btn ghost" data-act="f-azzera">Azzera</button><span class="grow"></span><button class="btn" data-act="f-applica" id="f-applica">Mostra ${n} ${n===1?"movimento":"movimenti"}</button></div>`;
@@ -268,15 +318,16 @@ function renderLista(){
 function rigaMov(m,C){
   const [,mm,dd]=m.data.split("-"),c=m._c,todo=c.id==="da-classificare";
   return `<button class="mov" data-act="mov" data-id="${m.id}"><span class="dt"><b>${+dd}</b>${MESI3[+mm-1]}</span>
-    <span style="min-width:0"><span class="who" style="display:block">${esc(m._e)}</span><span class="sub"><span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
+    <span style="min-width:0"><span class="who" style="display:block">${esc(m._e)}</span><span class="sub">${m.causale===CONTANTI?`<span class="pill cash">contanti</span>`:""}<span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
     <span class="amt num${m.importo>0?" pos":""}">${eurS(m.importo)}</span></button>`;
 }
 function chipsCategorie(C,sel){
   const gr=[["Uscite",c=>c.tipo==="normale"&&c.verso==="uscita"],["Entrate",c=>c.tipo==="normale"&&c.verso==="entrata"],["Giroconti, investimenti e saldo iniziale",c=>c.tipo!=="normale"]];
-  return gr.map(([t,f])=>{const cs=C.cats.filter(f);return cs.length?`<p class="hint" style="margin:8px 0 6px">${t}</p><div class="chips">${cs.map(c=>`<button class="chip" data-act="scegli-cat" data-cat="${esc(c.id)}" aria-pressed="${sel===c.id}">${esc(c.nome)}</button>`).join("")}</div>`:"";}).join("");
+  return gr.map(([t,f])=>{const cs=C.cats.filter(f);return cs.length?`<p class="hint" style="margin:8px 0 6px">${t}</p>${chipsAlbero(cs,(c,sub)=>`<button class="chip${sub?" sub":""}" data-act="scegli-cat" data-cat="${esc(c.id)}" aria-pressed="${sel===c.id}">${esc(c.nome)}</button>`)}`:"";}).join("");
 }
 function apriMov(id){
   const C=C0(),m=C.mov.find(x=>x.id===+id);if(!m)return;
+  if(m.causale===CONTANTI){sheet={tipo:"contanti",id:m.id,f:{verso:m.importo<0?"uscita":"entrata",importo:String(Math.abs(m.importo)).replace(".",","),data:m.data,descr:m.descrizione,cat:m.categoria||""}};renderSheet();return;}
   sheet={tipo:"mov",id:m.id,sel:m._c.id,regola:m._c.come!=="manuale",testo:m._c.regola||L.testoRegola(m),nota:m.nota||""};
   renderSheet();
 }
@@ -322,10 +373,47 @@ async function movAuto(){
   m.categoria=null;prepara(S.conto);chiudi();renderAll();toast("Ora la categoria la decidono le regole.");
 }
 
+/* ---------- contanti ---------- */
+// Entrate e uscite in contanti scritte a mano: stanno nel conto come gli altri movimenti, con causale CONTANTI.
+const oggiISO=()=>{const t=new Date();return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");};
+function sheetContanti(){
+  const C=C0(),f=sheet.f,cs=C.cats.filter(c=>c.tipo==="normale"&&c.verso===f.verso);
+  const conf=sheet.id&&S.conferma["cash"+sheet.id]&&Date.now()-S.conferma["cash"+sheet.id]<4000;
+  return `<div class="sh-head"><div><div class="eyebrow">Contanti · conto ${esc(contoNome(S.conto))}</div><h2>${sheet.id?"Modifica movimento":"Nuovo movimento"}</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+  <div class="seg" role="group" aria-label="Entrata o uscita">${[["uscita","Uscita"],["entrata","Entrata"]].map(([v,t])=>`<button data-act="c-verso" data-v="${v}" aria-pressed="${f.verso===v}">${t}</button>`).join("")}</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><label class="field" style="flex:1 1 140px"><span>Importo (€)</span><input data-sheet="importo" inputmode="decimal" value="${esc(f.importo)}" placeholder="0,00"></label>
+  <label class="field" style="flex:1 1 140px"><span>Data</span><input type="date" data-sheet="data" value="${esc(f.data)}" max="${oggiISO()}"></label></div>
+  <label class="field"><span>Descrizione</span><input data-sheet="descr" value="${esc(f.descr)}" maxlength="80" placeholder="${f.verso==="uscita"?"Es. mercato, parcheggio, mancia":"Es. regalo, rimborso amico"}"></label></div>
+  <div class="sec"><h3>Categoria</h3><p class="hint" style="margin-bottom:6px">Facoltativa: se non la scegli, l'app prova a riconoscerla dalla descrizione.</p>
+  ${chipsAlbero(cs,(c,sub)=>`<button class="chip${sub?" sub":""}" data-act="c-cat" data-cat="${esc(c.id)}" aria-pressed="${f.cat===c.id}">${esc(c.nome)}</button>`)}</div>
+  <div class="sh-foot">${sheet.id?`<button class="btn ${conf?"danger":"ghost"}" data-act="c-elimina">${conf?"Tocca di nuovo per eliminare":"Elimina"}</button>`:""}<span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="c-salva">Salva</button></div>`;
+}
+const ordinaMov=C=>C.mov.sort((a,b)=>a.data<b.data?1:a.data>b.data?-1:a.id-b.id);
+async function salvaContanti(){
+  const C=C0(),f=sheet.f,v=L.numero(f.importo),era=sheet.id;
+  if(!v||v<=0){toast("Scrivi un importo valido.");return;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(f.data||"")){toast("Scegli la data.");return;}
+  const row={data:f.data,valuta:f.data,importo:Math.round((f.verso==="uscita"?-v:v)*100)/100,causale:CONTANTI,descrizione:f.descr.trim()||"Contanti",categoria:f.cat||null};
+  let r;
+  if(sheet.id)r=await sb.from("movimenti").update(row).eq("id",sheet.id).select("id,data,valuta,importo,causale,descrizione,chiave,categoria,nota,importazione").single();
+  else r=await sb.from("movimenti").insert({...row,conto:S.conto,chiave:CONTANTI+"|"+Date.now()+"|"+Math.random().toString(36).slice(2,8)}).select("id,data,valuta,importo,causale,descrizione,chiave,categoria,nota,importazione").single();
+  if(r.error)return errore(r.error);
+  const m={...r.data,importo:Number(r.data.importo)};
+  C.mov=C.mov.filter(x=>x.id!==m.id).concat(m);ordinaMov(C);prepara(S.conto);
+  chiudi();renderAll();toast(`${era?"Modificato":"Aggiunto"}: ${eurS(m.importo)} in contanti, ${giorno(m.data)}.`);
+}
+async function eliminaContanti(){
+  const k="cash"+sheet.id;
+  if(!(S.conferma[k]&&Date.now()-S.conferma[k]<4000)){S.conferma[k]=Date.now();renderSheet();return;}
+  const C=C0(),{error}=await sb.from("movimenti").delete().eq("id",sheet.id);if(error)return errore(error);
+  C.mov=C.mov.filter(m=>m.id!==sheet.id);prepara(S.conto);chiudi();renderAll();toast("Movimento in contanti eliminato.");
+}
+
 /* ---------- categorie e regole ---------- */
 function vCategorie(C){
   const anno=S.mese.slice(0,4),ms=C.mov.filter(m=>m.data.startsWith(anno)),stat={};
-  for(const m of ms){const s=stat[m._c.id]??={n:0,t:0};s.n++;s.t+=m.importo;}
+  for(const m of ms)for(const id of new Set([m._c.id,radice(m._c.id)])){const s=stat[id]??={n:0,t:0};s.n++;s.t+=m.importo;}
   const usate={};for(const r of C.regole)usate[r.testo]=C.mov.filter(m=>m._c.regola===r.testo).length;
   const tipoTag=c=>c.id===SALDO?"saldo iniziale":c.tipo==="trasferimento"?"giroconto":c.tipo==="investimento"?"investimento":c.verso;
   const gr=[["Uscite",c=>c.tipo==="normale"&&c.verso==="uscita"],["Entrate",c=>c.tipo==="normale"&&c.verso==="entrata"],["Giroconti, investimenti e saldo iniziale",c=>c.tipo!=="normale"]];
@@ -333,7 +421,7 @@ function vCategorie(C){
   let h=`<div class="toolbar"><p class="meta grow">Numeri del ${anno}. Le categorie valgono solo per il conto ${esc(contoNome(S.conto))}.</p><button class="btn" data-act="cat-nuova">Nuova categoria</button></div>`;
   if(todo)h+=`<div class="banner"><p><b>${todo} da classificare</b> in tutto il conto.</p><button class="btn small" data-act="vai-todo-tutti">Classifica ora</button></div>`;
   h+=`<div class="grid g2"><div class="card">${gr.map(([t,f])=>{const cs=C.cats.filter(f);return cs.length?`<h3 style="margin:6px 0 4px">${t}</h3><div class="clist">${cs.map(c=>{const s=stat[c.id]||{n:0,t:0};
-    return `<div class="crow"><div><span class="n">${esc(c.nome)}</span>${c.tipo!=="normale"?`<span class="tag">${tipoTag(c)}</span>`:""}<div class="s num">${s.n} mov. · ${eurS(s.t)}</div></div>
+    return `<div class="crow${c.padre?" sub":""}"><div><span class="n">${esc(c.nome)}</span>${c.tipo!=="normale"?`<span class="tag">${tipoTag(c)}</span>`:""}<div class="s num">${s.n} mov. · ${eurS(s.t)}</div></div>
     <button class="btn ghost small" data-act="vai-cat-tutto" data-cat="${esc(c.id)}">Vedi</button><button class="btn ghost small" data-act="cat-mod" data-cat="${esc(c.id)}">Modifica</button></div>`;}).join("")}</div>`:"";}).join("")}</div>
   <div class="card"><div class="card-head"><h2 class="dotted">Regole imparate</h2><p class="meta">${C.regole.length} regole</p></div>
   ${C.regole.length?`<div class="clist">${C.regole.slice().sort((a,b)=>a.testo.localeCompare(b.testo,"it")).map(r=>`<div class="crow"><div><span class="n">«${esc(r.testo)}»</span><div class="s">→ ${esc(nomeCat(r.categoria))} · ${usate[r.testo]} mov.</div></div><span></span><button class="btn ghost small" data-act="reg-mod" data-id="${r.id}">Modifica</button></div>`).join("")}</div>`
@@ -346,23 +434,28 @@ function sheetCat(){
   const prot=c&&PROTETTE.includes(c.id),n=c?C.mov.filter(m=>m._c.id===c.id).length:0;
   const seg=(k,opts)=>`<div class="seg" role="group">${opts.map(([v,t])=>`<button data-act="cat-f" data-k="${k}" data-v="${v}" aria-pressed="${f[k]===v}">${t}</button>`).join("")}</div>`;
   const conf=S.conferma["cat"+sheet.id]&&Date.now()-S.conferma["cat"+sheet.id]<4000;
+  const haFigli=c&&C.cats.some(x=>x.padre===c.id),padri=padriPossibili(f);
   return `<div class="sh-head"><div><div class="eyebrow">${c?"Modifica categoria":"Nuova categoria"}</div><h2>${esc(f.nome||"Senza nome")}</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
   <label class="field"><span>Nome</span><input data-sheet="nome" value="${esc(f.nome)}" maxlength="40" placeholder="Es. Animali"></label>
   <div class="sec"><h3>Tipo</h3>${seg("tipo",[["normale","Entrata o uscita"],["trasferimento","Giroconto"],["investimento","Investimento"]])}
   <p class="hint" style="margin-top:8px">${f.tipo==="trasferimento"?"Soldi spostati tra conti vostri: non contano né come entrate né come uscite.":f.tipo==="investimento"?"Soldi investiti (broker, PAC, fondo pensione): non sono spese e contano per gli obiettivi di investimento.":"Conta nelle entrate o nelle uscite del conto."}</p>
   ${f.tipo==="normale"?`<div style="margin-top:8px">${seg("verso",[["uscita","Uscita"],["entrata","Entrata"]])}</div>`:""}</div>
+  <div class="sec"><h3>Sottocategoria</h3>${haFigli?`<p class="hint">Ha delle sottocategorie, quindi resta una categoria principale.</p>`:`<label class="field"><span>Dentro a</span><select class="input" data-sheet="padre"><option value="">Nessuna: è una categoria principale</option>${padri.map(p=>`<option value="${esc(p.id)}"${f.padre===p.id?" selected":""}>${esc(p.nome)}</option>`).join("")}</select></label><p class="hint" style="margin-top:6px">Le sottocategorie si sommano alla loro categoria principale in panoramica.</p>`}</div>
   <div class="sh-foot">${c&&!prot?`<button class="btn ${conf?"danger":"ghost"}" data-act="cat-elimina">${conf?"Tocca di nuovo per eliminare":"Elimina"}</button>`:""}<span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="cat-salva">Salva</button></div>
-  ${c&&!prot&&n?`<p class="hint" style="margin-top:8px">Se la elimini, i suoi ${n} movimenti tornano a essere classificati in automatico e le sue regole vengono cancellate.</p>`:""}`;
+  ${c&&!prot&&n?`<p class="hint" style="margin-top:8px">Se la elimini, i suoi ${n} movimenti tornano a essere classificati in automatico e le sue regole vengono cancellate.${haFigli?" Le sue sottocategorie diventano categorie principali.":""}</p>`:""}`;
 }
+// Una categoria può stare dentro a una principale dello stesso tipo (non dentro a se stessa né a una sottocategoria).
+const padriPossibili=f=>C0().cats.filter(x=>!x.padre&&x.id!==sheet.id&&x.tipo===f.tipo&&(f.tipo!=="normale"||x.verso===f.verso));
 async function salvaCat(){
   const C=C0(),f=sheet.f,nome=f.nome.trim();if(!nome){toast("Scrivi un nome.");return;}
+  const padre=f.padre&&padriPossibili(f).some(p=>p.id===f.padre)&&!(sheet.id&&C.cats.some(x=>x.padre===sheet.id))?f.padre:null;
   if(sheet.id){
-    const {error}=await sb.from("categorie").update({nome,tipo:f.tipo,verso:f.verso}).eq("conto",S.conto).eq("id",sheet.id);if(error)return errore(error);
-    Object.assign(C.byId[sheet.id],{nome,tipo:f.tipo,verso:f.verso});
+    const {error}=await sb.from("categorie").update({nome,tipo:f.tipo,verso:f.verso,padre}).eq("conto",S.conto).eq("id",sheet.id);if(error)return errore(error);
+    Object.assign(C.byId[sheet.id],{nome,tipo:f.tipo,verso:f.verso,padre});
   }else{
     let id=nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"cat";
     while(C.byId[id])id+="-2";
-    const row={conto:S.conto,id,nome,tipo:f.tipo,verso:f.verso,ordine:Math.max(0,...C.cats.map(c=>c.ordine))+1};
+    const row={conto:S.conto,id,nome,tipo:f.tipo,verso:f.verso,padre,ordine:Math.max(0,...C.cats.map(c=>c.ordine))+1};
     const {error}=await sb.from("categorie").insert(row);if(error)return errore(error);
     C.cats.push(row);
   }
@@ -372,10 +465,11 @@ async function eliminaCat(){
   const k="cat"+sheet.id;
   if(!(S.conferma[k]&&Date.now()-S.conferma[k]<4000)){S.conferma[k]=Date.now();renderSheet();return;}
   const C=C0(),id=sheet.id;
-  let r=await sb.from("movimenti").update({categoria:null}).eq("conto",S.conto).eq("categoria",id);if(r.error)return errore(r.error);
+  let r=await sb.from("categorie").update({padre:null}).eq("conto",S.conto).eq("padre",id);if(r.error)return errore(r.error);
+  r=await sb.from("movimenti").update({categoria:null}).eq("conto",S.conto).eq("categoria",id);if(r.error)return errore(r.error);
   r=await sb.from("regole").delete().eq("conto",S.conto).eq("categoria",id);if(r.error)return errore(r.error);
   r=await sb.from("categorie").delete().eq("conto",S.conto).eq("id",id);if(r.error)return errore(r.error);
-  C.cats=C.cats.filter(c=>c.id!==id);C.regole=C.regole.filter(x=>x.categoria!==id);C.mov.forEach(m=>{if(m.categoria===id)m.categoria=null;});
+  C.cats=C.cats.filter(c=>c.id!==id);C.cats.forEach(c=>{if(c.padre===id)c.padre=null;});C.regole=C.regole.filter(x=>x.categoria!==id);C.mov.forEach(m=>{if(m.categoria===id)m.categoria=null;});
   prepara(S.conto);chiudi();renderAll();toast("Categoria eliminata.");
 }
 function sheetReg(){
@@ -568,7 +662,7 @@ async function annullaImport(id){
 /* ===================== pannello, messaggi ===================== */
 function renderSheet(){
   if(!sheet){$("overlay").hidden=true;return;}
-  const html=sheet.tipo==="mov"?sheetMov():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheetObi();
+  const html=sheet.tipo==="mov"?sheetMov():sheet.tipo==="contanti"?sheetContanti():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheetObi();
   if(!sheet)return;
   const el=$("sheet"),top=el.scrollTop;el.innerHTML=html;$("overlay").hidden=false;el.scrollTop=top;
   document.body.style.overflow="hidden";
@@ -592,6 +686,11 @@ document.addEventListener("click",e=>{
   else if(a==="vai-cat"||a==="vai-cat-tutto"){S.tab="movimenti";S.filtri={...filtriVuoti(),cats:[b.dataset.cat]};S.verso="tutti";S.q="";if(a==="vai-cat-tutto")S.per="tutto";renderAll();scrollTo({top:0});}
   else if(a==="altri"){S.lim+=150;renderLista();}
   else if(a==="mov")apriMov(b.dataset.id);
+  else if(a==="contanti-nuovo"){sheet={tipo:"contanti",id:null,f:{verso:"uscita",importo:"",data:oggiISO(),descr:"",cat:""}};renderSheet();setTimeout(()=>document.querySelector('[data-sheet="importo"]')?.focus(),50);}
+  else if(a==="c-verso"){sheet.f.verso=b.dataset.v;sheet.f.cat="";renderSheet();}
+  else if(a==="c-cat"){sheet.f.cat=sheet.f.cat===b.dataset.cat?"":b.dataset.cat;renderSheet();}
+  else if(a==="c-salva")salvaContanti();
+  else if(a==="c-elimina")eliminaContanti();
   else if(a==="verso"){S.verso=b.dataset.v;S.lim=150;renderMain();}
   else if(a==="filtri"){sheet={tipo:"filtri",f:{...S.filtri,cats:S.filtri.cats.slice()}};renderSheet();}
   else if(a==="f-cat"){const c=sheet.f.cats,id=b.dataset.cat;sheet.f.cats=c.includes(id)?c.filter(x=>x!==id):c.concat(id);renderSheet();}
@@ -604,8 +703,9 @@ document.addEventListener("click",e=>{
   else if(a==="scegli-cat"){sheet.sel=b.dataset.cat;renderSheet();}
   else if(a==="mov-salva")salvaMov();
   else if(a==="mov-auto")movAuto();
-  else if(a==="cat-nuova"){sheet={tipo:"cat",id:null,f:{nome:"",tipo:"normale",verso:"uscita"}};renderSheet();}
-  else if(a==="cat-mod"){const c=C0().byId[b.dataset.cat];sheet={tipo:"cat",id:c.id,f:{nome:c.nome,tipo:c.tipo,verso:c.verso}};renderSheet();}
+  else if(a==="cat-nuova"){sheet={tipo:"cat",id:null,f:{nome:"",tipo:"normale",verso:"uscita",padre:""}};renderSheet();}
+  else if(a==="cat-mod"){const c=C0().byId[b.dataset.cat];sheet={tipo:"cat",id:c.id,f:{nome:c.nome,tipo:c.tipo,verso:c.verso,padre:c.padre||""}};renderSheet();}
+  else if(a==="apri-cat"){const id=b.dataset.cat;S.aperte.has(id)?S.aperte.delete(id):S.aperte.add(id);renderMain();}
   else if(a==="cat-f"){sheet.f[b.dataset.k]=b.dataset.v;renderSheet();}
   else if(a==="cat-salva")salvaCat();
   else if(a==="cat-elimina")eliminaCat();
