@@ -213,7 +213,7 @@ function vPanoramica(C){
 // Una barra per categoria principale. Se ha sottocategorie si apre e mostra il dettaglio.
 /* ---------- numeri del conto ---------- */
 // Saldo del conto corrente = saldo_base del conto + somma dei movimenti della banca (senza voci scritte a mano).
-// L'XLS non riporta il saldo: saldo_base corregge il calcolo quando l'XLS non parte dall'apertura del conto.
+// L'XLS non riporta il saldo: saldo_base (impostato in Supabase) è il saldo prima del primo movimento importato.
 const daBanca=m=>m.causale!==CONTANTI&&m.causale!==RETTIFICA;
 const contoAttivo=()=>D.conti.find(c=>c.id===S.conto)||{};
 const sommaBanca=(C,fino)=>C.mov.filter(m=>daBanca(m)&&(!fino||m.data<=fino)).reduce((s,m)=>s+m.importo,0);
@@ -223,36 +223,9 @@ function saldi(C){
 }
 function cardSaldi(C){
   const x=saldi(C),nome=nomeExtra();
-  return `<div class="card saldi"><div class="card-head"><h2 class="dotted">Numeri del conto</h2><button class="linkbtn" data-act="allinea">Allinea con l'home banking</button></div>
-  <div class="saldigrid"><div class="saldo" title="Somma dei movimenti della banca importati, fino all'ultimo XLS"><div class="k">Saldo conto corrente</div><div class="big num">${eur(x.banca)}</div><div class="d">${x.al?"al "+giorno(x.al):"nessun movimento importato"}</div></div>
-  <div class="saldo"><div class="k">Saldo ${nome}</div><div class="big num">${eurS(x.altro)}</div></div></div></div>`;
-}
-function sheetAllinea(){
-  const C=C0(),f=sheet.f,x=saldi(C);
-  return `<div class="sh-head"><div><div class="eyebrow">Conto ${esc(contoNome(S.conto))}</div><h2>Allinea il saldo</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
-  <p class="hint">Nell'XLS della banca il saldo non c'è: l'app lo calcola sommando i movimenti importati. Se l'XLS non parte dall'apertura del conto, scrivi qui il saldo che vedi in home banking a una certa data e l'app correggerà il calcolo.</p>
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><label class="field" style="flex:1 1 150px"><span>Data</span><input type="date" data-sheet="data" value="${esc(f.data)}"></label>
-  <label class="field" style="flex:1 1 150px"><span>Saldo in home banking (€)</span><input data-sheet="importo" inputmode="decimal" value="${esc(f.importo)}" placeholder="0,00"></label></div>
-  <p class="okline" id="allinea-prev" style="margin-top:12px">${anteprimaAllinea()}</p>
-  ${x.base?`<p class="hint" style="margin-top:8px">Correzione attuale: ${eurS(x.base)}.</p>`:""}
-  <div class="sh-foot">${x.base?`<button class="btn ghost" data-act="allinea-zero">Togli la correzione</button>`:""}<span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="allinea-salva">Salva</button></div>`;
-}
-function anteprimaAllinea(){
-  const C=C0(),f=sheet.f,v=L.numero(f.importo);
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(f.data||""))return "Scegli la data.";
-  const calc=sommaBanca(C,f.data);
-  return v==null?`Somma dei movimenti importati fino al ${giorno(f.data)}: ${eur(calc)}. Scrivi il saldo della banca a fine giornata.`
-    :`Somma dei movimenti fino al ${giorno(f.data)}: ${eur(calc)}. Correzione da applicare: ${eurS(Math.round((v-calc)*100)/100)}.`;
-}
-async function salvaAllinea(base){
-  const C=C0();
-  if(base==null){const v=L.numero(sheet.f.importo);if(v==null){toast("Scrivi il saldo della banca.");return;}
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(sheet.f.data||"")){toast("Scegli la data.");return;}
-    base=Math.round((v-sommaBanca(C,sheet.f.data))*100)/100;}
-  const {data,error}=await sb.from("conti").update({saldo_base:base}).eq("id",S.conto).select("id,saldo_base");
-  if(error)return toast(/saldo_base/.test(error.message||"")?"Prima va eseguito l'aggiornamento del database (SQL).":"Non salvato: "+error.message);
-  if(!data||!data.length){toast("Non ho il permesso di modificare questo conto.");return;}
-  contoAttivo().saldo_base=base;chiudi();renderAll();toast(base?`Saldo allineato (correzione ${eurS(base)}).`:"Correzione tolta: il saldo è la somma dei movimenti.");
+  return `<div class="card saldi"><div class="card-head"><h2 class="dotted">Numeri del conto</h2></div>
+  <div class="saldigrid${S.conto==="comune"?" uno":""}"><div class="saldo" title="Somma dei movimenti della banca importati, fino all'ultimo XLS"><div class="k">Saldo conto corrente</div><div class="big num">${eur(x.banca)}</div><div class="d">${x.al?"al "+giorno(x.al):"nessun movimento importato"}</div></div>
+  ${S.conto==="comune"?"":`<div class="saldo"><div class="k">Saldo ${nome}</div><div class="big num">${eurS(x.altro)}</div></div>`}</div></div>`;
 }
 /* ---------- ciambella delle uscite ---------- */
 // Colori fissi: le 8 categorie principali con più uscite in tutto lo storico del conto hanno ciascuna il proprio colore
@@ -771,7 +744,7 @@ async function annullaImport(id){
 /* ===================== pannello, messaggi ===================== */
 function renderSheet(){
   if(!sheet){$("overlay").hidden=true;return;}
-  const html=sheet.tipo==="allinea"?sheetAllinea():sheet.tipo==="mov"?sheetMov():sheet.tipo==="contanti"?sheetContanti():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheetObi();
+  const html=sheet.tipo==="mov"?sheetMov():sheet.tipo==="contanti"?sheetContanti():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheetObi();
   if(!sheet)return;
   const el=$("sheet"),top=el.scrollTop;el.innerHTML=html;$("overlay").hidden=false;el.scrollTop=top;
   document.body.style.overflow="hidden";
@@ -800,9 +773,6 @@ document.addEventListener("click",e=>{
   else if(a==="c-cat"){sheet.f.cat=sheet.f.cat===b.dataset.cat?"":b.dataset.cat;renderSheet();}
   else if(a==="c-salva")salvaContanti();
   else if(a==="c-elimina")eliminaContanti();
-  else if(a==="allinea"){const x=saldi(C0());sheet={tipo:"allinea",f:{data:x.al||oggiISO(),importo:""}};renderSheet();}
-  else if(a==="allinea-salva")salvaAllinea();
-  else if(a==="allinea-zero")salvaAllinea(0);
   else if(a==="verso"){S.verso=b.dataset.v;S.lim=150;renderMain();}
   else if(a==="filtri"){sheet={tipo:"filtri",f:{...S.filtri,cats:S.filtri.cats.slice()}};renderSheet();}
   else if(a==="f-cat"){const c=sheet.f.cats,id=b.dataset.cat;sheet.f.cats=c.includes(id)?c.filter(x=>x!==id):c.concat(id);renderSheet();}
@@ -841,7 +811,6 @@ document.addEventListener("input",e=>{
   else if(t.dataset.sheet&&sheet){
     const k=t.dataset.sheet;
     if(sheet.f&&k in sheet.f)sheet.f[k]=t.value; else if(k!=="regola")sheet[k]=t.value;
-    if(sheet.tipo==="allinea"){const el=$("allinea-prev");if(el)el.textContent=anteprimaAllinea();}
     if(k==="testo"){const el=$("conta-testo");if(el){el.textContent=nMov(contaTesto(t.value)," di questo conto");}}
   }
 });

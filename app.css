@@ -319,3 +319,4 @@ div.dleg{cursor:default}
 .dleg .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dleg .a{font-weight:600}
 .dleg .p{color:var(--muted);font-size:12px;text-align:right}
+.saldigrid.uno{grid-template-columns:minmax(0,1fr)}
