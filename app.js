@@ -394,9 +394,10 @@ function sheetContanti(){
   ${chipsAlbero(cs,(c,sub)=>`<button class="chip${sub?" sub":""}" data-act="c-cat" data-cat="${esc(c.id)}" aria-pressed="${f.cat===c.id}">${esc(c.nome)}</button>`)}</div>
   <div class="sh-foot">${sheet.id?`<button class="btn ${conf?"danger":"ghost"}" data-act="c-elimina">${conf?"Tocca di nuovo per eliminare":"Elimina"}</button>`:""}<span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="c-salva">Salva</button></div>`;
 }
-// Scheda "Altro" / "Rifle": solo i movimenti fuori banca scritti a mano, per tenerne traccia.
+// Scheda "Altro" / "Rifle": solo i movimenti fuori banca scritti a mano, per tenerne traccia. Restano fuori quelli
+// di categorie che non sono entrate/uscite (polizza vita, saldo iniziale, giroconti): contano altrove.
 function vAltro(C){
-  const nome=nomeExtra(),tutti=C.mov.filter(m=>m.causale===CONTANTI);
+  const nome=nomeExtra(),tutti=C.mov.filter(m=>m.causale===CONTANTI&&(C.byId[m._c.id]?.tipo||"normale")==="normale");
   const p=S.per==="tutto"?"":S.per==="anno"?S.mese.slice(0,4):S.mese,ms=tutti.filter(m=>m.data.startsWith(p));
   const ent=ms.filter(m=>m.importo>0).reduce((s,m)=>s+m.importo,0),usc=-ms.filter(m=>m.importo<0).reduce((s,m)=>s+m.importo,0);
   let h=barraPeriodo(true)+`<div class="toolbar"><p class="meta grow">Entrate e uscite fuori banca scritte a mano nel conto ${esc(contoNome(S.conto))}: ${tutti.length} in tutto.</p><button class="btn" data-act="contanti-nuovo">+ ${nome}</button></div>`;
@@ -409,7 +410,7 @@ function vAltro(C){
     const tk=gr[k].reduce((s,m)=>s+m.importo,0);
     h+=`<div class="mgroup"><h3>${ymNome(k)} <span class="num">${eurS(tk)}</span></h3><div class="mlist">${gr[k].map(m=>rigaMov(m,C)).join("")}</div></div>`;
   }
-  return h+`<p class="hint" style="margin-top:12px">I totali qui sopra sono la semplice somma di questi movimenti, compresi quelli di categorie escluse dalla panoramica (polizza vita, saldo iniziale).</p>`;
+  return h+`<p class="hint" style="margin-top:12px">Qui compaiono solo entrate e uscite. I movimenti scritti a mano per polizza vita, saldo iniziale o giroconti restano nel conto ma non in questa pagina.</p>`;
 }
 const ordinaMov=C=>C.mov.sort((a,b)=>a.data<b.data?1:a.data>b.data?-1:a.id-b.id);
 async function salvaContanti(){
