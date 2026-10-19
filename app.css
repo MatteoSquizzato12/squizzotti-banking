@@ -342,14 +342,19 @@ table.heat td.h6 button{color:var(--h-ink6)}
 table.heat td.tt{text-align:right;font-weight:600;padding:6px 8px;white-space:nowrap}
 table.heat tfoot th,table.heat tfoot td{border-top:1px solid var(--line);padding:7px 6px;text-align:center;font-weight:600;color:var(--ink)}
 table.heat tfoot th{text-align:left}
-.dbars{display:flex;flex-direction:column;gap:2px}
-.dbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;border:0;background:none;text-align:left;padding:6px 8px;border-radius:10px;cursor:pointer;width:100%}
-.dbar:hover{background:var(--chip)}
-.dbar .n{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dbar.sub .n{color:var(--muted);padding-left:12px;font-size:13px}
-.dbar .a{font-size:13.5px;font-weight:600;text-align:right}
-.dbar .p{color:var(--muted);font-weight:400;font-size:12px;margin-left:6px}
-.dbar .track{grid-column:1 / -1;height:10px;display:flex;align-items:center}
-.dbar .fill{height:10px;border-radius:0 4px 4px 0;background:var(--out);min-width:2px}
-.dbar.in .fill{background:var(--in)}
-.dbar.sub .fill{opacity:.6;margin-left:12px}
+
+/* ---------- menu delle sezioni: tendina su PC, barra in basso sul telefono ---------- */
+.nav{margin-top:14px;position:relative}
+.menu{position:relative;display:inline-block}
+.menubtn{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 16px 9px 12px;font-weight:700;cursor:pointer;font-size:15px}
+.menubtn:hover,.menubtn[aria-expanded="true"]{border-color:var(--yellow)}
+.menubtn .caret{color:var(--muted);font-size:12px;margin-left:2px}
+.menu .ti{display:block;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.menulist{position:absolute;top:calc(100% + 6px);left:0;z-index:45;min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgb(0 0 0 / .16);padding:6px;display:flex;flex-direction:column;gap:2px}
+.menuitem{display:flex;align-items:center;gap:10px;border:0;background:none;padding:9px 12px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left;width:100%}
+.menuitem:hover{background:var(--chip)}
+.menuitem[aria-current="true"]{background:var(--yellow);color:var(--on-yellow)}
+.menuitem .count,.menubtn .count{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--yellow);color:var(--on-yellow);font-size:11.5px;text-align:center;margin-left:auto}
+.menuitem[aria-current="true"] .count{background:#FFFFFF}
+@media (min-width:641px){.nav .tabs{display:none}}
+@media (max-width:640px){.menu{display:none}.nav{margin-top:0}}

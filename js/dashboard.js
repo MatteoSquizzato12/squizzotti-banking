@@ -42,7 +42,8 @@ function vDashboard(C){
     <div class="card"><div class="card-head"><h2>Saldo del conto a fine mese</h2></div><div class="chart" id="d-saldo"></div></div>
   </div>`;
   h+=dashTabella(C,mesi);
-  h+=`<div class="dgrid2">${dashBarre(C,mesi,"entrata")}${dashBarre(C,mesi,"uscita")}</div>`;
+  const agg={};for(const [id,v] of Object.entries(T.net)){const r=radice(id);agg[r]=(agg[r]||0)+v;}
+  h+=cardTorta(Object.entries(agg).filter(([,v])=>v<-0.004).map(([id,v])=>[id,-v]).sort((a,b)=>b[1]-a[1]),T.u);
   return h;
 }
 
@@ -73,21 +74,6 @@ function dashTabella(C,mesi){
   <div class="hwrap"><table class="heat num"><thead><tr><th></th>${mesi.map(k=>`<th scope="col">${MESI3[+k.slice(5)-1]}${k.endsWith("-01")||k===mesi[0]?" "+k.slice(2,4):""}</th>`).join("")}<th scope="col">Totale</th><th scope="col">Media</th></tr></thead>
   <tbody>${rows.map(r=>riga(r,"")+r.figli.map(s=>riga(s,"sub")).join("")).join("")}</tbody>
   <tfoot><tr><th scope="row">Totale uscite</th>${totM.map(v=>`<td>${compatto(v)}</td>`).join("")}<td class="tt">${eur(totT)}</td><td class="tt">${eur(totT/mesi.length)}</td></tr></tfoot></table></div></div>`;
-}
-
-/* ---------- entrate / uscite per categoria (con sottocategorie) ---------- */
-function dashBarre(C,mesi,verso){
-  const cell=dashMatrice(C,mesi),segno=verso==="uscita"?-1:1,tot=id=>segno*mesi.reduce((s,k)=>s+(cell[id]?.[k]||0),0);
-  const rows=[];
-  for(const c of C.cats.filter(c=>!c.padre&&c.tipo==="normale"&&c.verso===verso)){
-    const fs=C.cats.filter(x=>x.padre===c.id).map(f=>({id:f.id,nome:f.nome,v:tot(f.id)})).filter(f=>f.v>0.004);
-    const v=tot(c.id)+fs.reduce((s,f)=>s+f.v,0);if(v>0.004)rows.push({id:c.id,nome:c.nome,v,fs});
-  }
-  rows.sort((a,b)=>b.v-a.v);
-  const T=rows.reduce((s,r)=>s+r.v,0),max=rows[0]?.v||1,cls=verso==="uscita"?"out":"in";
-  const bar=(id,nome,v,sub)=>`<button class="dbar ${cls}${sub?" sub":""}" data-act="d-cella" data-cat="${esc(id)}" data-ym="" title="${esc(nome)}: ${eur(v)}"><span class="n">${sub?"↳ ":""}${esc(nome)}</span><span class="a num">${eur(v)}<span class="p">${T?(v/T*100<1?"<1":Math.round(v/T*100)):0}%</span></span><span class="track"><span class="fill" style="width:${(v/max*100).toFixed(1)}%"></span></span></button>`;
-  return `<div class="card"><div class="card-head"><h2>${verso==="uscita"?"Uscite":"Entrate"} per categoria</h2><p class="meta num">${eur(T)}</p></div>
-  ${rows.length?`<div class="dbars">${rows.map(r=>bar(r.id,r.nome,r.v,false)+r.fs.sort((a,b)=>b.v-a.v).map(f=>bar(f.id,f.nome,f.v,true)).join("")).join("")}</div>`:`<p class="meta">Nessun movimento nel periodo.</p>`}</div>`;
 }
 
 /* ---------- grafici ---------- */

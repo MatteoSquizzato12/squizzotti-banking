@@ -136,13 +136,16 @@ const ICONE={dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x
 function renderTabs(){
   const C=C0();
   const n=C?daClassificare(C.mov).length:0;
-  const tabs=[["panoramica","Panoramica"]];
-  if(typeof dashOk==="function"&&dashOk())tabs.push(["dashboard","Dashboard"]); // solo su PC
-  tabs.push(["movimenti","Movimenti",n],["altro",nomeExtra()],["categorie","Categorie"]);
+  const tabs=typeof dashOk==="function"&&dashOk()?[["dashboard","Dashboard"]]:[]; // la dashboard c'è solo su PC
+  tabs.push(["panoramica","Panoramica"],["movimenti","Movimenti",n],["altro",nomeExtra()],["categorie","Categorie"]);
   if(personale())tabs.push(["obiettivi","Obiettivi"]);
   tabs.push(["importa","Importa"]);
   if(!tabs.some(t=>t[0]===S.tab))S.tab="panoramica";
-  $("tabs").innerHTML=C?tabs.map(([id,t,c])=>`<button class="tab" role="tab" data-act="tab" data-tab="${id}" aria-selected="${S.tab===id}"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true">${ICONE[id]}</svg><span class="tl">${t}</span>${c?`<span class="count" title="Da classificare">${c}</span>`:""}</button>`).join(""):"";
+  // Sul PC le sezioni stanno in un menu a tendina; sul telefono nella barra in basso (vedi app.css).
+  const att=tabs.find(t=>t[0]===S.tab)||tabs[0],ic=id=>`<svg class="ti" viewBox="0 0 24 24" aria-hidden="true">${ICONE[id]}</svg>`,num=c=>c?`<span class="count" title="Da classificare">${c}</span>`:"";
+  $("tabs").innerHTML=C?`<div class="menu"><button class="menubtn" data-act="menu" aria-haspopup="menu" aria-expanded="${!!S.menu}">${ic(att[0])}<span>${att[1]}</span>${num(att[2])}<span class="caret" aria-hidden="true">▾</span></button>
+    ${S.menu?`<div class="menulist" role="menu">${tabs.map(([id,t,c])=>`<button role="menuitem" class="menuitem" data-act="tab" data-tab="${id}" aria-current="${S.tab===id}">${ic(id)}<span>${t}</span>${num(c)}</button>`).join("")}</div>`:""}</div>
+    <div class="tabs" role="tablist">${tabs.map(([id,t,c])=>`<button class="tab" role="tab" data-act="tab" data-tab="${id}" aria-selected="${S.tab===id}">${ic(id)}<span class="tl">${t}</span>${c?`<span class="count" title="Da classificare">${c}</span>`:""}</button>`).join("")}</div>`:"";
 }
 function renderMain(){
   const C=C0(),el=$("main");
@@ -732,15 +735,19 @@ function errore(e){console.error(e);toast(!navigator.onLine?"Sei offline: riprov
 /* ===================== eventi ===================== */
 document.addEventListener("click",e=>{
   if(e.target.id==="overlay"){chiudi();return;}
+  if(S.menu&&!e.target.closest(".menu")){S.menu=false;renderTabs();} // clic fuori: il menu si chiude
   const b=e.target.closest("[data-act]");if(!b)return;const a=b.dataset.act;
   if(a==="logout"){esci();return;}
   if(!C0()&&a!=="conto")return;
+  if(a==="menu"){S.menu=!S.menu;renderTabs();return;}
   if(a==="conto"){if(S.conto!==b.dataset.id)apriConto(b.dataset.id);}
-  else if(a==="tab"){S.tab=b.dataset.tab;S.lim=150;nascondiTip();renderAll();scrollTo({top:0});}
+  else if(a==="tab"){S.menu=false;S.tab=b.dataset.tab;S.lim=150;nascondiTip();renderAll();scrollTo({top:0});}
   else if(a==="per"){S.per=b.dataset.per;S.lim=150;renderMain();}
   else if(a==="mese"){S.mese=b.dataset.ym;S.per="mese";S.lim=150;nascondiTip();renderMain();}
   else if(a==="anno")scegliAnno(b.dataset.y);
   else if(a==="vai-todo"||a==="vai-todo-tutti"){S.tab="movimenti";S.filtri={...filtriVuoti(),cats:["da-classificare"]};S.verso="tutti";S.q="";if(a==="vai-todo-tutti")S.per="tutto";renderAll();}
+  else if(a==="vai-cat"&&S.tab==="dashboard"){S.tab="movimenti";S.filtri={...filtriVuoti(),cats:[b.dataset.cat]};S.verso="tutti";S.q="";
+    if(S.dper&&S.dper!=="12m"){S.per="anno";S.mese=S.dper+S.mese.slice(4);}else S.per="tutto";nascondiTip();renderAll();scrollTo({top:0});}
   else if(a==="vai-cat"||a==="vai-cat-tutto"){S.tab="movimenti";S.filtri={...filtriVuoti(),cats:[b.dataset.cat]};S.verso="tutti";S.q="";if(a==="vai-cat-tutto")S.per="tutto";renderAll();scrollTo({top:0});}
   else if(a==="altri"){S.lim+=150;renderLista();}
   else if(a==="mov")apriMov(b.dataset.id);
@@ -800,7 +807,7 @@ document.addEventListener("change",e=>{
   const d=e.target.closest&&e.target.closest("#drop");if(!d)return;e.preventDefault();
   d.classList.toggle("over",ev==="dragover");if(ev==="drop")leggiFile(e.dataTransfer.files[0]);
 }));
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&sheet)chiudi();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(sheet)chiudi();else if(S.menu){S.menu=false;renderTabs();}}});
 let rT;addEventListener("resize",()=>{clearTimeout(rT);rT=setTimeout(()=>{disegnaGrafici();if(typeof disegnaDashboard==="function")disegnaDashboard();},120);});
 
 /* ===================== accesso e avvio ===================== */
@@ -827,6 +834,7 @@ async function start(){
   if(error||!conti?.length){S.msg=nonPronto(error)||!conti?.length?"<b>Database da preparare.</b><br>Esegui <code>supabase/schema.sql</code> nel SQL Editor di Supabase.":"Non riesco a caricare i conti.";renderMain();return;}
   const ord={[persona]:0,comune:1};
   D.conti=conti.sort((a,b)=>(ord[a.id]??2)-(ord[b.id]??2));
+  if(typeof dashOk==="function"&&dashOk())S.tab="dashboard";
   const pref0=pref("conto","");
   await apriConto(D.conti.some(c=>c.id===pref0)?pref0:D.conti[0].id);
   if(chan)sb.removeChannel(chan);
