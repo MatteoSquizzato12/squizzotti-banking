@@ -7,6 +7,8 @@
   --in:#2A78D6; --out:#C98500; --grid:#E6E7E8; --axis:#C3C5C7;
   /* Ciambella: 8 colori categoriali verificati (ordine fisso), 8 tinte degli stessi colori, grigio oltre la 16a */
   --s1:#2A78D6;--s2:#EB6834;--s3:#1BAF7A;--s4:#EDA100;--s5:#E87BA4;--s6:#008300;--s7:#6250D6;--s8:#E34948;--s-altro:#AEB2B4;
+  /* Mappa di calore della dashboard: una tinta (giallo/ocra), dal chiaro allo scuro */
+  --h1:#FFF4D6;--h2:#FDE3A0;--h3:#F9CC5E;--h4:#EDA100;--h5:#C98500;--h6:#8F5E00;--h-ink:#1E2021;--h-ink6:#FFFFFF;
   --s9:#9EC5F4;--s10:#F5B08F;--s11:#8FDCBF;--s12:#F6D27A;--s13:#F4BCD1;--s14:#7CC47C;--s15:#B3AAF0;--s16:#F1A3A2;
   --ok:#2E7D4F; --warn:#C98500; --warn-bg:#FFF3D1; --bad:#B3261E; --bad-bg:#FBE3E1;
   --f-display:"Akira Expanded", "Arial Black", system-ui, sans-serif;
@@ -18,7 +20,8 @@
   --soft:#2E2817; --soft-ink:#F3D27A;
   --in:#3987E5; --out:#C98500; --grid:#2C2F30; --axis:#4A4F51;
   --s1:#3987E5;--s2:#D95926;--s3:#199E70;--s4:#C98500;--s5:#D55181;--s6:#008300;--s7:#9085E9;--s8:#E66767;--s-altro:#5E6466;
-  --s9:#23548F;--s10:#9A4320;--s11:#13704F;--s12:#8A6000;--s13:#93385A;--s14:#005C00;--s15:#4B3FA0;--s16:#9E3434;
+--h1:#352D1B;--h2:#54431A;--h3:#7A5E12;--h4:#A67B06;--h5:#D49A0A;--h6:#F3C24A;--h-ink:#F6F7F8;--h-ink6:#131313;
+    --s9:#23548F;--s10:#9A4320;--s11:#13704F;--s12:#8A6000;--s13:#93385A;--s14:#005C00;--s15:#4B3FA0;--s16:#9E3434;
   --ok:#71C796; --warn:#E5A929; --warn-bg:#33290F; --bad:#EE8276; --bad-bg:#3A1C18; color-scheme:dark;
 }}
 :root[data-theme="dark"]{
@@ -26,7 +29,8 @@
   --soft:#2E2817; --soft-ink:#F3D27A;
   --in:#3987E5; --out:#C98500; --grid:#2C2F30; --axis:#4A4F51;
   --s1:#3987E5;--s2:#D95926;--s3:#199E70;--s4:#C98500;--s5:#D55181;--s6:#008300;--s7:#9085E9;--s8:#E66767;--s-altro:#5E6466;
-  --s9:#23548F;--s10:#9A4320;--s11:#13704F;--s12:#8A6000;--s13:#93385A;--s14:#005C00;--s15:#4B3FA0;--s16:#9E3434;
+--h1:#352D1B;--h2:#54431A;--h3:#7A5E12;--h4:#A67B06;--h5:#D49A0A;--h6:#F3C24A;--h-ink:#F6F7F8;--h-ink6:#131313;
+    --s9:#23548F;--s10:#9A4320;--s11:#13704F;--s12:#8A6000;--s13:#93385A;--s14:#005C00;--s15:#4B3FA0;--s16:#9E3434;
   --ok:#71C796; --warn:#E5A929; --warn-bg:#33290F; --bad:#EE8276; --bad-bg:#3A1C18; color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -308,3 +312,44 @@ div.dleg{cursor:default}
 .dleg .a{font-weight:600}
 .dleg .p{color:var(--muted);font-size:12px;text-align:right}
 .saldigrid.uno{grid-template-columns:minmax(0,1fr)}
+
+/* ---------- dashboard (solo PC) ---------- */
+body.wide .wrap{max-width:1440px}
+.dkpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px}
+.dgrid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px}
+.lkey{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle}
+.lkey.ri{border-color:var(--s3)}
+.chart .lri{fill:none;stroke:var(--s3);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .dri{fill:var(--s3);stroke:var(--surface);stroke-width:2}
+.chart .lsal{fill:none;stroke:var(--ink);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .asal{fill:var(--ink);fill-opacity:.07}
+.chart .dsal{fill:var(--ink);stroke:var(--surface);stroke-width:2}
+.chart .cross{stroke:var(--muted);stroke-width:1}
+.hwrap{overflow-x:auto}
+table.heat{border-collapse:separate;border-spacing:2px;width:100%;font-size:12.5px}
+table.heat th{font-weight:500;color:var(--muted);text-align:right;padding:4px 6px;white-space:nowrap}
+table.heat thead th{text-align:center}
+table.heat tbody th{text-align:left;color:var(--ink);font-weight:600;min-width:170px}
+table.heat tbody tr.sub th{font-weight:400;color:var(--muted);padding-left:14px}
+table.heat th button,table.heat td.hc button{border:0;background:none;font:inherit;color:inherit;cursor:pointer;padding:0;width:100%;text-align:inherit}
+table.heat td.hc{padding:0;border-radius:6px;background:var(--chip);min-width:52px}
+table.heat td.hc button{display:block;padding:7px 6px;text-align:center;border-radius:6px;color:var(--h-ink)}
+table.heat td.hc button:hover{box-shadow:inset 0 0 0 2px var(--ink)}
+table.heat td.h0{background:transparent}
+table.heat td.h1{background:var(--h1)} table.heat td.h2{background:var(--h2)} table.heat td.h3{background:var(--h3)}
+table.heat td.h4{background:var(--h4)} table.heat td.h5{background:var(--h5)} table.heat td.h6{background:var(--h6)}
+table.heat td.h6 button{color:var(--h-ink6)}
+table.heat td.tt{text-align:right;font-weight:600;padding:6px 8px;white-space:nowrap}
+table.heat tfoot th,table.heat tfoot td{border-top:1px solid var(--line);padding:7px 6px;text-align:center;font-weight:600;color:var(--ink)}
+table.heat tfoot th{text-align:left}
+.dbars{display:flex;flex-direction:column;gap:2px}
+.dbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;border:0;background:none;text-align:left;padding:6px 8px;border-radius:10px;cursor:pointer;width:100%}
+.dbar:hover{background:var(--chip)}
+.dbar .n{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dbar.sub .n{color:var(--muted);padding-left:12px;font-size:13px}
+.dbar .a{font-size:13.5px;font-weight:600;text-align:right}
+.dbar .p{color:var(--muted);font-weight:400;font-size:12px;margin-left:6px}
+.dbar .track{grid-column:1 / -1;height:10px;display:flex;align-items:center}
+.dbar .fill{height:10px;border-radius:0 4px 4px 0;background:var(--out);min-width:2px}
+.dbar.in .fill{background:var(--in)}
+.dbar.sub .fill{opacity:.6;margin-left:12px}

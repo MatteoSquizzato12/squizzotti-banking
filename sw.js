@@ -1,9 +1,9 @@
 // Service worker: tiene in memoria i file dell'app così si apre anche senza rete.
 // I dati (Supabase) passano sempre dalla rete: qui non vengono mai salvati.
 // Ad ogni rilascio che cambia i file, aumentare VERSION.
-const VERSION = "sb-16";
+const VERSION = "sb-17";
 const SHELL = [
-  "./", "index.html", "app.css", "app.js", "js/logica.js", "config.js", "manifest.webmanifest",
+  "./", "index.html", "app.css", "app.js", "js/logica.js", "js/dashboard.js", "config.js", "manifest.webmanifest",
   "fonts/akira-super-bold.woff2", "img/pattern-allos.svg", "icons/icon.svg", "icons/icon-192.png", "icons/apple-touch-icon.png",
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
 ];

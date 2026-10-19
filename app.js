@@ -29,7 +29,7 @@ function setPref(k,v){try{localStorage.setItem("bank:"+k,v);}catch(e){}}
 
 const sb=supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});
 let user=null,persona=null,chan=null;
-const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",filtri:filtriVuoti(),lim:150,imp:null,conferma:{},msg:"Carico i conti…"};
+const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",dper:"12m",filtri:filtriVuoti(),lim:150,imp:null,conferma:{},msg:"Carico i conti…"};
 const D={conti:[],c:{}}; // c[conto] = {mov, cats, regole, imps, obi, mesi}
 let sheet=null;
 
@@ -132,11 +132,13 @@ function renderConti(){
   $("conti").innerHTML=D.conti.map(c=>{const sub=c.id==="comune"?"Conto in comune":"Conto personale";
     return `<button class="conto" data-act="conto" data-id="${c.id}" aria-pressed="${S.conto===c.id}"><span class="av">${esc(c.nome[0])}</span><span>${esc(c.nome)}<small>${sub}</small></span></button>`;}).join("");
 }
-const ICONE={altro:'<path d="M3 7h15a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 7l12-4v4"/><circle cx="16.5" cy="14" r="1.2"/>',panoramica:'<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',movimenti:'<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',categorie:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',obiettivi:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',importa:'<path d="M12 15V4M7 9l5-5 5 5M4 20h16"/>'};
+const ICONE={dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',altro:'<path d="M3 7h15a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 7l12-4v4"/><circle cx="16.5" cy="14" r="1.2"/>',panoramica:'<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',movimenti:'<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',categorie:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',obiettivi:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',importa:'<path d="M12 15V4M7 9l5-5 5 5M4 20h16"/>'};
 function renderTabs(){
   const C=C0();
   const n=C?daClassificare(C.mov).length:0;
-  const tabs=[["panoramica","Panoramica"],["movimenti","Movimenti",n],["altro",nomeExtra()],["categorie","Categorie"]];
+  const tabs=[["panoramica","Panoramica"]];
+  if(typeof dashOk==="function"&&dashOk())tabs.push(["dashboard","Dashboard"]); // solo su PC
+  tabs.push(["movimenti","Movimenti",n],["altro",nomeExtra()],["categorie","Categorie"]);
   if(personale())tabs.push(["obiettivi","Obiettivi"]);
   tabs.push(["importa","Importa"]);
   if(!tabs.some(t=>t[0]===S.tab))S.tab="panoramica";
@@ -150,9 +152,11 @@ function renderMain(){
   else if(S.tab==="categorie")el.innerHTML=vCategorie(C);
   else if(S.tab==="obiettivi")el.innerHTML=vObiettivi(C);
   else if(S.tab==="altro")el.innerHTML=vAltro(C);
+  else if(S.tab==="dashboard")el.innerHTML=vDashboard(C);
   else el.innerHTML=S.imp?vAnteprima(C):vImporta(C);
   el.insertAdjacentHTML("beforeend",`<p class="meta" style="text-align:center;margin-top:36px">Accesso come ${esc(user?.email||"")} · <button class="linkbtn" data-act="logout">Log out</button></p>`);
-  disegnaGrafici();tipTorta();
+  disegnaGrafici();tipTorta();if(S.tab==="dashboard")disegnaDashboard();
+  document.body.classList.toggle("wide",S.tab==="dashboard");
   const ml=el.querySelector(".mesi"),on=ml&&ml.querySelector('[aria-pressed="true"]');
   if(on&&ml.scrollWidth>ml.clientWidth)ml.scrollLeft=on.offsetLeft-ml.offsetLeft-(ml.clientWidth-on.offsetWidth)/2;
 }
@@ -797,7 +801,7 @@ document.addEventListener("change",e=>{
   d.classList.toggle("over",ev==="dragover");if(ev==="drop")leggiFile(e.dataTransfer.files[0]);
 }));
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&sheet)chiudi();});
-let rT;addEventListener("resize",()=>{clearTimeout(rT);rT=setTimeout(disegnaGrafici,120);});
+let rT;addEventListener("resize",()=>{clearTimeout(rT);rT=setTimeout(()=>{disegnaGrafici();if(typeof disegnaDashboard==="function")disegnaDashboard();},120);});
 
 /* ===================== accesso e avvio ===================== */
 function showLogin(msg){
