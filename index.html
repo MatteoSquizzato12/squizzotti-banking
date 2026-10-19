@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Squizzotti's Banking</title>
+<meta name="description" content="Conti correnti di Matteo e Anna: movimenti, categorie e obiettivi di risparmio.">
+<meta name="theme-color" content="#FAB80C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Banking">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body class="signed-out">
+<header class="band">
+  <div class="wrap top">
+    <div class="brand">
+      <svg class="logo" viewBox="-2 -2 159.84 141.16" aria-hidden="true"><circle class="coin" cx="78" cy="48" r="46"/><path class="eur" d="M96.1,31.1 A22,22 0 1 0 96.1,64.9 M53,43 H80 M53,53 H80"/><g class="bone"><circle cx="25.04" cy="112.12" r="25.03"/><circle cx="130.81" cy="112.12" r="25.03"/><path d="m41.73,130.76s13.35-13.93,36.19-13.93,36.18,13.93,36.18,13.93v-37.29s-14.42,14.29-36.18,14.29c-22.83,0-36.19-14.3-36.19-14.3v37.3Z"/></g></svg>
+      <h1>Squizzotti's Banking</h1>
+    </div>
+  </div>
+</header>
+
+<section class="wrap login" id="login" hidden>
+  <form class="card login-card" id="login-form" autocomplete="on">
+    <h3>Accedi</h3>
+    <p class="meta">Solo per Matteo e Anna. Usa la stessa email e password di Squizzotti's Diet.</p>
+    <label class="field"><span>Email</span><input type="email" id="login-email" name="email" autocomplete="username" required></label>
+    <label class="field"><span>Password</span><input type="password" id="login-pw" name="password" autocomplete="current-password" required></label>
+    <p class="warnline" id="login-err" hidden></p>
+    <button class="btn" type="submit" id="login-btn">Entra</button>
+  </form>
+</section>
+
+<div class="wrap app" id="app" hidden>
+  <nav class="conti" id="conti" aria-label="Conti"></nav>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+  <main id="main"></main>
+</div>
+<div class="overlay" id="overlay" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="tip" id="tip" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="js/logica.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

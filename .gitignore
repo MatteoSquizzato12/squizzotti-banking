@@ -1,0 +1,21 @@
+# Segreti e configurazioni locali
+.env
+.env.*
+*.local
+
+# Dati personali: gli estratti conto non vanno MAI nel repo pubblico
+dati/
+*.xls
+*.xlsx
+*.csv
+*.pdf
+
+# Test locali
+_test*
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+node_modules/
