@@ -344,17 +344,20 @@ table.heat tfoot th,table.heat tfoot td{border-top:1px solid var(--line);padding
 table.heat tfoot th{text-align:left}
 
 /* ---------- menu delle sezioni: tendina su PC, barra in basso sul telefono ---------- */
-.nav{margin-top:14px;position:relative}
+/* Conti a sinistra, menu delle sezioni a destra sulla stessa riga */
+.topbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
+.nav{position:relative}
 .menu{position:relative;display:inline-block}
 .menubtn{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 16px 9px 12px;font-weight:700;cursor:pointer;font-size:15px}
 .menubtn:hover,.menubtn[aria-expanded="true"]{border-color:var(--yellow)}
 .menubtn .caret{color:var(--muted);font-size:12px;margin-left:2px}
 .menu .ti{display:block;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.menulist{position:absolute;top:calc(100% + 6px);left:0;z-index:45;min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgb(0 0 0 / .16);padding:6px;display:flex;flex-direction:column;gap:2px}
+.menulist{position:absolute;top:calc(100% + 6px);right:0;z-index:45;min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgb(0 0 0 / .16);padding:6px;display:flex;flex-direction:column;gap:2px}
 .menuitem{display:flex;align-items:center;gap:10px;border:0;background:none;padding:9px 12px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left;width:100%}
 .menuitem:hover{background:var(--chip)}
 .menuitem[aria-current="true"]{background:var(--yellow);color:var(--on-yellow)}
 .menuitem .count,.menubtn .count{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--yellow);color:var(--on-yellow);font-size:11.5px;text-align:center;margin-left:auto}
 .menuitem[aria-current="true"] .count{background:#FFFFFF}
 @media (min-width:641px){.nav .tabs{display:none}}
-@media (max-width:640px){.menu{display:none}.nav{margin-top:0}}
+@media (max-width:640px){.menu{display:none}.topbar .conti{flex:1 1 100%}}
+#main>.card.empty:first-child,#main>.loading:first-child{margin-top:16px}
