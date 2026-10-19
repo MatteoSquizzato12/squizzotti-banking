@@ -91,8 +91,8 @@ const personale=()=>S.conto&&S.conto!=="comune";
 /* ===================== render ===================== */
 function renderAll(){renderConti();renderTabs();renderMain();}
 function renderConti(){
-  $("conti").innerHTML=D.conti.map(c=>{const C=D.c[c.id];const sub=c.id==="comune"?"Conto in comune":"Conto personale";
-    return `<button class="conto" data-act="conto" data-id="${c.id}" aria-pressed="${S.conto===c.id}"><span class="av">${esc(c.nome[0])}</span><span>${esc(c.nome)}<small>${sub}${C&&C.ultimo?" · "+C.mov.length+" mov.":""}</small></span></button>`;}).join("");
+  $("conti").innerHTML=D.conti.map(c=>{const sub=c.id==="comune"?"Conto in comune":"Conto personale";
+    return `<button class="conto" data-act="conto" data-id="${c.id}" aria-pressed="${S.conto===c.id}"><span class="av">${esc(c.nome[0])}</span><span>${esc(c.nome)}<small>${sub}</small></span></button>`;}).join("");
 }
 const ICONE={panoramica:'<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',movimenti:'<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',categorie:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',obiettivi:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',importa:'<path d="M12 15V4M7 9l5-5 5 5M4 20h16"/>'};
 function renderTabs(){
