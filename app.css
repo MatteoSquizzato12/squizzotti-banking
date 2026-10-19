@@ -261,3 +261,10 @@ details.dups summary{cursor:pointer;font-weight:600;padding:6px 0}
   .chipline.mesi{flex:1 1 100%;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px 0;margin:0 -16px;padding-inline:16px;scroll-padding-inline:16px}
   .chipline.mesi::-webkit-scrollbar{display:none}
 }
+
+/* ---------- movimenti: entrate/uscite e filtri ---------- */
+.mbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;justify-content:space-between;margin:2px 0 10px}
+.filtribtn{gap:8px}
+.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--yellow);color:var(--on-yellow);font-size:11.5px;font-weight:700;letter-spacing:0}
+.chips.attivi{align-items:center;margin:0 0 10px}
+.chips.attivi .chip{padding:4px 10px;font-size:12.5px}

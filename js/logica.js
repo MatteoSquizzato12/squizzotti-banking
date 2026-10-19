@@ -122,7 +122,8 @@ const BASE=[
   ["rimborsi","Rimborsi","normale","entrata"],
   ["altre-entrate","Altre entrate","normale","entrata"],
   ["giroconti","Giroconti tra conti propri","trasferimento","uscita"],
-  ["investimenti","Investimenti","investimento","uscita"]
+  ["investimenti","Investimenti","investimento","uscita"],
+  ["saldo-iniziale","Saldo iniziale (dal vecchio conto)","trasferimento","entrata"]
 ];
 function categoriePredefinite(conto){
   const l=BASE.slice();
