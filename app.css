@@ -290,3 +290,11 @@ details.dups summary{cursor:pointer;font-weight:600;padding:6px 0}
 /* ---------- contanti ---------- */
 .mbtns{display:inline-flex;gap:8px}
 .pill.cash{background:var(--soft);color:var(--soft-ink);font-weight:600}
+
+/* ---------- numeri del conto ---------- */
+.card.saldi{margin:16px 0 4px}
+.saldigrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.saldo{background:var(--chip);border-radius:16px;padding:12px 14px;min-width:0}
+.saldo .k{font-size:12.5px;color:var(--muted)}
+.saldo .big{font-size:clamp(20px,3vw,28px);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.saldo .d{font-size:11.5px;color:var(--muted)}

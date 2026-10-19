@@ -42,6 +42,15 @@ drop policy if exists "conti: i miei" on public.conti;
 create policy "conti: i miei" on public.conti
   for select to authenticated using ((select public.puo_vedere_conto(id)));
 
+-- Saldo del conto = saldo_base + somma dei movimenti della banca importati.
+-- saldo_base serve quando l'XLS non parte dall'apertura del conto: l'app lo calcola dal saldo letto in home banking.
+alter table public.conti add column if not exists saldo_base numeric(12, 2) not null default 0;
+drop policy if exists "conti: allineo il saldo" on public.conti;
+create policy "conti: allineo il saldo" on public.conti
+  for update to authenticated using ((select public.puo_vedere_conto(id))) with check ((select public.puo_vedere_conto(id)));
+revoke update on public.conti from authenticated;
+grant update (saldo_base) on public.conti to authenticated; -- dall'app si può cambiare solo questo campo
+
 -- ---------- Categorie (personalizzabili, una lista per conto) ----------
 -- tipo: normale = entrate/uscite; trasferimento = giroconti tra conti propri (esclusi dai totali);
 --       investimento = soldi investiti (contano per gli obiettivi di investimento, non come spese).
