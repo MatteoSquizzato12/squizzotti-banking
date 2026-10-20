@@ -21,11 +21,16 @@ Questo repository è pubblico: **non contiene dati personali né chiavi segrete*
 | `sw.js`, `manifest.webmanifest`, `icons/` | Installazione sul telefono e uso offline |
 | `supabase/schema.sql` | Tabelle e regole di accesso |
 | `supabase/functions/banca/` | Collegamento con la banca: consenso, scelta dei conti, aggiornamento, saldo |
+| `vendor/` | SheetJS Community Edition 0.20.3 (licenza Apache 2.0): legge l'Excel della prepagata scaricato da Nexi |
 | `supabase/cron-banca.sql` | Aggiornamento automatico (modello: il segreto non sta nel repository) |
 
 ## Dati di Banca Valsabbina
 
 Ogni movimento ha `remittance_information`: una delle righe è `Causale Movimento: XX` (il codice causale della banca), le altre unite da spazi formano la descrizione, identica a quella degli estratti conto XLS usati nella prima versione. Il saldo arriva dalla banca: la funzione imposta `conti.saldo_base` = saldo − somma dei movimenti bancari salvati e `conti.saldo_al`.
+
+## Carta prepagata
+
+Il collegamento diretto con NEXI (Enable Banking) per ora dà errore al login: ogni mese si carica l'Excel dei movimenti della carta scaricato da Nexi (Impostazioni → Collegamento banca). Le righe «Non Contabilizzato» si saltano; i movimenti hanno causale `CARTA`, la chiave usa anche il riferimento di Nexi. Al primo caricamento la categoria «Ricarica prepagata» del conto diventa un giroconto. Dal 1° del mese la Dashboard ricorda di caricare il file.
 
 ## Duplicati
 

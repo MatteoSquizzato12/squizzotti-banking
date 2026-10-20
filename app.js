@@ -38,7 +38,7 @@ let ritornoBanca=(()=>{const p=new URLSearchParams(location.search);
   if(r)history.replaceState(null,"",location.pathname);return r;})();
 const sb=supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});
 let user=null,persona=null,chan=null;
-const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",dper:"12m",filtri:filtriVuoti(),lim:150,conferma:{},msg:"Carico i conti…",nascosto:pref("nascosto","0")==="1"};
+const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",dper:"12m",filtri:filtriVuoti(),lim:150,conferma:{},msg:"Carico i conti…",nascosto:pref("nascosto","1")==="1"};
 const D={conti:[],c:{},banca:{}}; // c[conto] = {mov, cats, regole, imps, obi, mesi}; banca[conto] = collegamento con la banca
 let sheet=null;
 
@@ -165,6 +165,23 @@ function renderTabs(){
   $("tabs").innerHTML=C?`<span class="solo-pc">${bottoneOcchio()}</span><div class="menu"><button class="menubtn" data-act="menu" aria-haspopup="menu" aria-expanded="${!!S.menu}">${ic(att[0])}<span>${att[1]}</span>${num(att[2])}<span class="caret" aria-hidden="true">▾</span></button>
     ${S.menu?`<div class="menulist" role="menu">${menu.map(([id,t,c])=>`<button role="menuitem" class="menuitem" data-act="tab" data-tab="${id}" aria-current="${sel===id}">${ic(id)}<span>${t}</span>${num(c)}</button>`).join("")}</div>`:""}</div>
     <div class="tabs" role="tablist">${barra.map(([id,t,c])=>`<button class="tab" role="tab" data-act="tab" data-tab="${id}" aria-selected="${selB===id}">${icB(id)}<span class="tl">${t}</span>${c?`<span class="count" title="Da classificare">${c}</span>`:""}</button>`).join("")}</div>`:"";
+  renderLato(menu,sel,ic);
+}
+// PC: colonna laterale come nell'home banking da computer (al posto della fascia con il titolo e del menu a tendina):
+// logo, schede dei conti con il saldo, sezioni, interruttore degli importi, accesso. In «Altro» le schede mostrano il saldo Altro.
+const LOGO=(document.querySelector(".band .logo")||{}).outerHTML||"";
+function renderLato(menu,sel,ic){
+  const el=$("lato");if(!el)return;
+  if(!C0()){el.innerHTML="";return;}
+  const altro=S.tab==="altro";
+  const conti=D.conti.map(c=>{const C=D.c[c.id],x=C?saldi(C,c.id):null,iban=(D.banca[c.id]||{}).conto?.iban,on=c.id===S.conto;
+    return `<button class="lconto${on?" sel":""}" data-act="conto" data-id="${c.id}" aria-pressed="${on}"><small>${c.id==="comune"?"Conto in comune":"Conto personale"}${iban?" · **** "+esc(iban):""}</small>
+      <b>${esc(c.nome)}</b><span class="lc-k">${altro?"Saldo "+nomeExtraDi(c.id):"Saldo contabile"}</span><span class="lc-v num">${x?(altro?eurS(x.altro):eur(x.banca)):"…"}</span></button>`;}).join("");
+  el.innerHTML=`<div class="lato-brand">${LOGO}<b>Squizzotti's Banking</b></div>
+    <p class="lato-tit">Conti</p><div class="lato-conti">${conti}</div>
+    <p class="lato-tit">Sezioni</p><nav class="lato-nav">${menu.map(([id,t,c])=>`<button class="menuitem" data-act="tab" data-tab="${id}" aria-current="${sel===id}">${ic(id)}<span>${t}</span>${c?`<span class="count" title="Da classificare">${c}</span>`:""}</button>`).join("")}</nav>
+    <div class="lato-piede"><button class="riga" data-act="occhio-imp" role="switch" aria-checked="${S.nascosto}"><span class="ric">${icona(S.nascosto?"coperto":"privacy","oi")}</span><span class="rt"><b>Nascondi gli importi</b></span><span class="switch" aria-hidden="true"><i></i></span></button>
+    <p class="meta">${esc(user?.email||"")}</p></div>`;
 }
 // Intestazione delle pagine interne: «‹ Impostazioni» e il titolo. Movimenti ha il tasto solo sul telefono (sul PC sta nel menu).
 function testaPagina(id){
@@ -316,11 +333,12 @@ async function precarica(forza){
   for(const c of D.conti){
     if(c.id===S.conto||(D.c[c.id]&&!forza))continue;
     try{await caricaConto(c.id);}catch(e){continue;}
-    if((S.tab==="panoramica"||S.tab==="altro")&&!sheet&&!$("q"))renderMain();
+    renderTabs();if((S.tab==="panoramica"||S.tab==="altro")&&!sheet&&!$("q"))renderMain();
   }
 }
 const bottoneOcchio=()=>`<button class="iconbtn occhio" data-act="occhio" aria-pressed="${S.nascosto}" aria-label="${S.nascosto?"Mostra gli importi":"Nascondi gli importi"}" title="${S.nascosto?"Mostra gli importi":"Nascondi gli importi"}">${icona(S.nascosto?"coperto":"privacy","oi")}</button>`;
-function occhio(v){S.nascosto=v;setPref("nascosto",v?"1":"0");nascondiTip();renderMain();if(sheet)renderSheet();}
+// Alla prima apertura gli importi sono nascosti; poi vale la scelta fatta su questo dispositivo.
+function occhio(v){S.nascosto=v;setPref("nascosto",v?"1":"0");nascondiTip();renderTabs();renderMain();if(sheet)renderSheet();}
 // Come nella home delle app delle banche: gli ultimi movimenti, poi «Tutti i movimenti».
 function cardUltimi(C){
   const ms=C.mov.slice(0,5);if(!ms.length)return "";

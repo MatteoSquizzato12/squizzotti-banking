@@ -426,3 +426,32 @@ button.riga:hover,a.riga:hover{background:var(--chip)}
 .prow .num:last-child{font-weight:600}
 .okline{background:var(--soft);color:var(--soft-ink);border-radius:8px;padding:8px 12px;font-size:13.5px;margin:10px 0 0}
 label.btn{display:inline-flex;align-items:center;cursor:pointer}
+
+/* ---------- PC: colonna laterale (conti + sezioni), senza fascia del titolo ---------- */
+.lato{display:none}
+.lato-brand{display:flex;align-items:center;gap:10px;padding:2px 6px 8px}
+.lato-brand .logo{width:46px;height:46px;flex:none;box-sizing:border-box;padding:7px 6px;border-radius:14px;background:var(--yellow)}
+.lato-brand b{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:14px;line-height:1.15;letter-spacing:.02em}
+.lato-tit{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:16px 8px 6px}
+.lato-conti{display:flex;flex-direction:column;gap:8px}
+.lconto{display:flex;flex-direction:column;gap:1px;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;border-radius:18px;padding:12px 14px;cursor:pointer}
+.lconto:hover{border-color:var(--yellow)}
+.lconto.sel{background:var(--yellow) url("img/pattern-allos.svg") 0 0/160px auto repeat;border-color:var(--yellow);color:var(--on-yellow)}
+.lconto small{font-size:11.5px;opacity:.75;font-variant-numeric:tabular-nums}
+.lconto b{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:15px;letter-spacing:.02em}
+.lc-k{font-size:11.5px;opacity:.75;margin-top:8px}
+.lc-v{font-size:22px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lato-nav{display:flex;flex-direction:column;gap:2px}
+.lato-nav .ti{display:block;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.lato-piede{margin-top:16px;border-top:1px solid var(--line);padding-top:6px}
+.lato-piede .riga{padding:10px 8px;border:0;border-radius:12px;grid-template-columns:34px minmax(0,1fr) auto}
+.lato-piede .ric{width:34px;height:34px}
+.lato-piede .meta{padding:2px 8px;font-size:12px;overflow-wrap:anywhere}
+@media (min-width:821px) and (pointer:fine),(min-width:1025px){
+  body.signed-in .band{display:none}
+  .wrap.app,body.wide .wrap.app{max-width:1500px;display:grid;grid-template-columns:272px minmax(0,1fr);gap:28px;align-items:start;padding-top:22px}
+  .lato{display:flex;flex-direction:column;position:sticky;top:22px;max-height:calc(100vh - 44px);overflow:auto;scrollbar-width:thin}
+  .wrap.app>.topbar{display:none}
+  #main{min-width:0}
+  #main>.carosello,#main>.puntini{display:none} /* i conti stanno nella colonna laterale */
+}
