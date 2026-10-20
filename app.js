@@ -1,4 +1,4 @@
-/* Squizzotti's Banking: interfaccia. Lettura XLS, duplicati e classificazione stanno in js/logica.js. */
+/* Squizzotti's Banking: interfaccia. Classificazione ed esercenti stanno in js/logica.js; i movimenti arrivano dalla banca (supabase/functions/banca). */
 const L=window.Logica;
 const MESI=["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
 const MESI3=["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
@@ -34,7 +34,7 @@ let ritornoBanca=(()=>{const p=new URLSearchParams(location.search);
   if(r)history.replaceState(null,"",location.pathname);return r;})();
 const sb=supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});
 let user=null,persona=null,chan=null;
-const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",dper:"12m",filtri:filtriVuoti(),lim:150,imp:null,conferma:{},msg:"Carico i conti…"};
+const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",dper:"12m",filtri:filtriVuoti(),lim:150,conferma:{},msg:"Carico i conti…"};
 const D={conti:[],c:{},banca:{}}; // c[conto] = {mov, cats, regole, imps, obi, mesi}; banca[conto] = collegamento con la banca
 let sheet=null;
 
@@ -161,7 +161,7 @@ function renderMain(){
   else if(S.tab==="obiettivi")el.innerHTML=vObiettivi(C);
   else if(S.tab==="altro")el.innerHTML=vAltro(C);
   else if(S.tab==="dashboard")el.innerHTML=vDashboard(C);
-  else el.innerHTML=S.imp?vAnteprima(C):vBanca(C);
+  else el.innerHTML=vBanca(C);
   el.insertAdjacentHTML("beforeend",`<p class="meta" style="text-align:center;margin-top:36px">Accesso come ${esc(user?.email||"")} · <button class="linkbtn" data-act="logout">Log out</button></p>`);
   disegnaGrafici();tipTorta();if(S.tab==="dashboard")disegnaDashboard();
   document.body.classList.toggle("wide",S.tab==="dashboard");
@@ -495,7 +495,7 @@ function vCategorie(C){
     <button class="btn ghost small" data-act="vai-cat-tutto" data-cat="${esc(c.id)}">Vedi</button><button class="btn ghost small" data-act="cat-mod" data-cat="${esc(c.id)}">Modifica</button></div>`;}).join("")}</div>`:"";}).join("")}</div>
   <div class="card"><div class="card-head"><h2 class="dotted">Regole imparate</h2><p class="meta">${C.regole.length} regole</p></div>
   ${C.regole.length?`<div class="clist">${C.regole.slice().sort((a,b)=>a.testo.localeCompare(b.testo,"it")).map(r=>`<div class="crow"><div><span class="n">«${esc(r.testo)}»</span><div class="s">→ ${esc(nomeCat(r.categoria))} · ${usate[r.testo]} mov.</div></div><span></span><button class="btn ghost small" data-act="reg-mod" data-id="${r.id}">Modifica</button></div>`).join("")}</div>`
-  :`<p class="meta">Ancora nessuna. Quando correggi la categoria di un movimento puoi dire all'app di ricordarla: nasce una regola, che vale anche per i prossimi XLS.</p>`}
+  :`<p class="meta">Ancora nessuna. Quando correggi la categoria di un movimento puoi dire all'app di ricordarla: nasce una regola, che vale anche per i prossimi movimenti.</p>`}
   <div class="sec"><h3>Come sceglie la categoria</h3><ol class="hint" style="padding-left:18px;margin:0;display:flex;flex-direction:column;gap:3px"><li>La scelta fatta a mano su quel movimento.</li><li>Le regole imparate (se più regole valgono, vince la più lunga).</li><li>Il codice causale della banca (commissioni, bollo, F24, prelievi…).</li><li>Un elenco di esercenti italiani (supermercati, utenze, carburante…).</li><li>Altrimenti «Da classificare» (uscite) o «Altre entrate».</li></ol></div></div></div>`;
   return h;
 }
@@ -634,12 +634,6 @@ async function eliminaObi(){
   C0().obi=C0().obi.filter(o=>o.id!==sheet.id);chiudi();renderAll();toast("Obiettivo eliminato.");
 }
 
-/* ---------- importazione ---------- */
-let xlsxP=null;
-function caricaXLSX(){
-  return xlsxP||=new Promise((ok,ko)=>{const s=document.createElement("script");s.src="vendor/xlsx.core.min.js";
-    s.onload=()=>ok(window.XLSX);s.onerror=()=>{xlsxP=null;s.remove();ko(new Error("Non riesco a caricare il lettore XLS: controlla la connessione."));};document.head.appendChild(s);});
-}
 /* ---------- collegamento con la banca ---------- */
 // Tutto passa dalla funzione Supabase "banca" (supabase/functions/banca): la chiave di Enable Banking non è nel browser.
 async function funzioneBanca(azione,dati){
@@ -680,15 +674,10 @@ function vBanca(C){
   let h=cardBanca();
   h+=`<div class="card" style="margin-top:14px"><div class="card-head"><h2 class="dotted">Movimenti arrivati</h2>${C.primo?`<p class="meta">movimenti dal ${giorno(C.mov[C.mov.length-1].data)} al ${giorno(C.mov[0].data)}</p>`:""}</div>`;
   if(!C.imps.length)h+=`<p class="meta">Ancora nessuno.</p>`;
-  else h+=C.imps.map(i=>{const k="imp"+i.id,conf=S.conferma[k]&&Date.now()-S.conferma[k]<4000;
+  else h+=C.imps.map(i=>{
     return `<div class="hist"><div><b>${esc(i.nome_file||"XLS")}</b><div class="s">${i.dal?giorno(i.dal)+" – "+giorno(i.al):""} · ${i.righe_importate} ${i.righe_importate===1?"nuovo":"nuovi"}${i.righe_duplicate?` · ${i.righe_duplicate} già presenti`:""} · ${new Date(i.caricato).toLocaleDateString("it-IT")}</div></div>
-    <button class="btn ${conf?"danger":"ghost"} small" data-act="imp-annulla" data-id="${i.id}">${conf?"Conferma: cancella i suoi movimenti":"Annulla"}</button></div>`;}).join("");
+    </div>`;}).join("");
   h+=`</div>`;
-  // Riserva finché il collegamento non è collaudato: poi si toglie.
-  h+=`<details class="card riserva" style="margin-top:14px"><summary><b>Importa da file XLS</b> <span class="meta">(riserva)</span></summary>
-    <label class="drop" id="drop" style="margin-top:12px"><b>Carica l'XLS del conto ${esc(contoNome(S.conto))}</b>
-    <p>Dall'home banking di Banca Valsabbina scarica l'estratto conto in formato XLS e sceglilo qui. Prima di salvare vedi un'anteprima: i movimenti già presenti sono esclusi in automatico.</p>
-    <span class="btn">Scegli il file</span><input type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-file hidden></label></details>`;
   return h;
 }
 async function bancaCollega(){
@@ -744,81 +733,6 @@ async function abbina(){
     await dopoBanca(esiti);
   }catch(e){sheet.occ=false;renderSheet();toast("Collegamento non riuscito: "+e.message);}
 }
-async function chiaviInPeriodo(dal,al){
-  const rows=await tutte(()=>sb.from("movimenti").select("chiave").eq("conto",S.conto).gte("data",dal).lte("data",al));
-  return rows.map(r=>r.chiave);
-}
-const carte=ms=>{const s=new Set();for(const m of ms)for(const x of String(m.descrizione).matchAll(/CARTA(?:\s+N\.)?\s+(\d{4,6}\**\d{0,4})/gi))s.add(x[1].replace(/^(\d{6})\d*\**(\d{4})$/,"$1…$2"));return s;};
-// Avviso se il file sembra di un altro conto (le carte che compaiono sono quelle di un altro conto).
-async function controlloConto(ms){
-  const f=carte(ms);if(!f.size)return null;
-  const mie=carte(C0().mov);if([...f].some(c=>mie.has(c)))return null;
-  const {data}=await sb.from("movimenti").select("conto,descrizione").neq("conto",S.conto).ilike("descrizione","%CARTA%").limit(1000);
-  const per={};for(const r of data||[])for(const c of carte([r]))if(f.has(c))(per[r.conto]??=new Set()).add(c);
-  const altro=Object.keys(per)[0];
-  return altro?`Questo file contiene la carta ${[...per[altro]][0]}, che finora è comparsa solo nel conto <b>${esc(contoNome(altro))}</b>. Sei sicuro che sia il conto ${esc(contoNome(S.conto))}?`:null;
-}
-async function leggiFile(file){
-  if(!file)return;
-  if(file.size>15e6){toast("File troppo grande.");return;}
-  $("main").innerHTML=`<div class="loading">Leggo ${esc(file.name)}…</div>`;
-  try{
-    const [XLSX,buf]=await Promise.all([caricaXLSX(),file.arrayBuffer()]);
-    const {movimenti,scartate}=L.leggiXLS(XLSX,buf);
-    if(!movimenti.length)throw new Error("Nel file non ci sono movimenti.");
-    if(movimenti.some(m=>m.divisa&&m.divisa!=="EUR"))toast("Attenzione: ci sono movimenti in valuta diversa dall'euro.");
-    S.imp={nome:file.name,scartate,...await preparaAnteprima(movimenti)};
-  }catch(e){toast(e.message||"Non riesco a leggere il file.");S.imp=null;}
-  renderAll();
-}
-async function preparaAnteprima(movimenti){
-  const date=movimenti.map(m=>m.data).sort(),dal=date[0],al=date[date.length-1];
-  const {nuovi,duplicati}=L.confronta(movimenti,await chiaviInPeriodo(dal,al));
-  const C=C0(),ctx={conto:S.conto,cats:C.cats,regole:C.regole};
-  const righe=nuovi.map(m=>({...m,dup:false})).concat(duplicati.map(m=>({...m,dup:true})));
-  righe.forEach(m=>{m._c=L.classifica(m,ctx);m._e=L.esercente(m);});
-  return {movimenti,righe,sel:new Set(righe.map((m,i)=>m.dup?-1:i).filter(i=>i>=0)),dal,al,nNuovi:nuovi.length,nDup:duplicati.length,avviso:await controlloConto(movimenti).catch(()=>null)};
-}
-function rigaImp(m,i){
-  const on=S.imp.sel.has(i);
-  return `<label class="irow${on?"":" off"}"><input type="checkbox" data-imp="${i}" ${on?"checked":""}><span class="meta num">${giorno(m.data).replace(/ \d{4}$/,"")}</span>
-    <span class="w"><b>${esc(m._e)}</b> <span class="pill${m._c.id==="da-classificare"?" todo":""}">${esc(nomeCat(m._c.id))}</span></span><span class="num${m.importo>0?" pos":""}" style="font-weight:600">${eurS(m.importo)}</span></label>`;
-}
-function vAnteprima(C){
-  const I=S.imp,n=I.sel.size;
-  const nuove=I.righe.map((m,i)=>[m,i]).filter(([m])=>!m.dup),dup=I.righe.map((m,i)=>[m,i]).filter(([m])=>m.dup);
-  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2 class="dotted">Anteprima</h2><p class="meta">${esc(I.nome)} · dal ${giorno(I.dal)} al ${giorno(I.al)} · conto ${esc(contoNome(S.conto))}</p></div>
-  ${I.avviso?`<p class="warnline" style="margin-bottom:10px">${I.avviso}</p>`:""}
-  <div class="stats"><div class="stat"><div class="v num">${I.movimenti.length}</div><div class="k">righe nel file</div></div><div class="stat new"><div class="v num">${I.nNuovi}</div><div class="k">nuove</div></div><div class="stat"><div class="v num">${I.nDup}</div><div class="k">già importate</div></div></div>
-  ${I.scartate?`<p class="hint">${I.scartate} righe senza data o importo ignorate.</p>`:""}
-  ${I.nNuovi?`<div class="card-head" style="margin:14px 0 4px"><h3>Movimenti nuovi</h3><button class="linkbtn" data-act="imp-tutti">${nuove.every(([,i])=>I.sel.has(i))?"Deseleziona tutti":"Seleziona tutti"}</button></div><div>${nuove.map(([m,i])=>rigaImp(m,i)).join("")}</div>`
-    :`<p class="okline">Tutti i movimenti di questo file sono già stati importati: non c'è niente da aggiungere.</p>`}
-  ${I.nDup?`<details class="dups"${I.nNuovi?"":" open"}><summary>Già importati (${I.nDup}): esclusi</summary><p class="hint">Stessa data, causale, importo e descrizione di un movimento già salvato. Spunta una riga solo se sei sicuro che sia un movimento diverso.</p>${dup.map(([m,i])=>rigaImp(m,i)).join("")}</details>`:""}
-  <div class="sh-foot"><button class="btn ghost" data-act="imp-chiudi">Annulla</button><button class="btn" data-act="imp-conferma" id="imp-ok" ${n?"":"disabled"}>Importa ${n} ${n===1?"movimento":"movimenti"}</button></div></div>`;
-}
-async function confermaImport(){
-  const I=S.imp,btn=$("imp-ok");if(!I||!I.sel.size)return;btn.disabled=true;btn.textContent="Controllo…";
-  // Doppio controllo: nel frattempo qualcuno potrebbe aver importato lo stesso periodo.
-  const ora=new Set(await chiaviInPeriodo(I.dal,I.al).catch(()=>[]));
-  if(I.righe.some((m,i)=>I.sel.has(i)&&!m.dup&&ora.has(m.chiave))){
-    S.imp={...I,...await preparaAnteprima(I.movimenti)};renderAll();
-    toast("Nel frattempo alcuni movimenti sono stati importati: ho aggiornato l'anteprima.");return;
-  }
-  const scelti=I.righe.filter((m,i)=>I.sel.has(i)).map(({data,valuta,importo,causale,descrizione,chiave})=>({data,valuta,importo,causale,descrizione,chiave}));
-  btn.textContent="Importo…";
-  const {error}=await sb.rpc("importa_movimenti",{p_conto:S.conto,p_nome_file:I.nome,p_righe_file:I.movimenti.length,p_righe_duplicate:I.righe.length-scelti.length,p_movimenti:scelti});
-  if(error){btn.disabled=false;btn.textContent="Riprova";return errore(error);}
-  S.imp=null;await caricaConto(S.conto);
-  S.mese=scelti.map(m=>m.data).sort().pop().slice(0,7);S.per="mese";S.tab="panoramica";
-  renderAll();scrollTo({top:0});toast(`Importati ${scelti.length} movimenti.`);
-}
-async function annullaImport(id){
-  const k="imp"+id;
-  if(!(S.conferma[k]&&Date.now()-S.conferma[k]<4000)){S.conferma[k]=Date.now();renderMain();setTimeout(()=>{if(S.tab==="banca"&&!S.imp)renderMain();},4100);return;}
-  const {error}=await sb.from("importazioni").delete().eq("id",id);if(error)return errore(error);
-  await caricaConto(S.conto);renderAll();toast("Importazione annullata: i suoi movimenti sono stati cancellati.");
-}
-
 /* ===================== pannello, messaggi ===================== */
 function renderSheet(){
   if(!sheet){$("overlay").hidden=true;return;}
@@ -880,10 +794,6 @@ document.addEventListener("click",e=>{
   else if(a==="obi-f"){sheet.f[b.dataset.k]=b.dataset.v;renderSheet();}
   else if(a==="obi-salva")salvaObi();
   else if(a==="obi-elimina")eliminaObi();
-  else if(a==="imp-chiudi"){S.imp=null;renderMain();}
-  else if(a==="imp-tutti"){const I=S.imp,nuove=I.righe.map((m,i)=>i).filter(i=>!I.righe[i].dup),tutte=nuove.every(i=>I.sel.has(i));nuove.forEach(i=>tutte?I.sel.delete(i):I.sel.add(i));renderMain();}
-  else if(a==="imp-conferma")confermaImport();
-  else if(a==="imp-annulla")annullaImport(+b.dataset.id);
   else if(a==="banca-collega")bancaCollega();
   else if(a==="banca-aggiorna")bancaAggiorna();
   else if(a==="banca-scollega")bancaScollega();
@@ -903,14 +813,7 @@ document.addEventListener("input",e=>{
 document.addEventListener("change",e=>{
   const t=e.target;
   if(t.dataset.sheet==="regola"){sheet.regola=t.checked;renderSheet();}
-  else if(t.dataset.imp!=null){const i=+t.dataset.imp;t.checked?S.imp.sel.add(i):S.imp.sel.delete(i);t.closest(".irow").classList.toggle("off",!t.checked);
-    const n=S.imp.sel.size,btn=$("imp-ok");if(btn){btn.disabled=!n;btn.textContent=`Importa ${n} ${n===1?"movimento":"movimenti"}`;}}
-  else if(t.dataset.file!=null){leggiFile(t.files[0]);t.value="";}
 });
-["dragover","dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{
-  const d=e.target.closest&&e.target.closest("#drop");if(!d)return;e.preventDefault();
-  d.classList.toggle("over",ev==="dragover");if(ev==="drop")leggiFile(e.dataTransfer.files[0]);
-}));
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(sheet)chiudi();else if(S.menu){S.menu=false;renderTabs();}}});
 let rT;addEventListener("resize",()=>{clearTimeout(rT);rT=setTimeout(()=>{disegnaGrafici();if(typeof disegnaDashboard==="function")disegnaDashboard();},120);});
 
@@ -920,7 +823,7 @@ function showLogin(msg){
   const er=$("login-err");er.hidden=!msg;er.textContent=msg||"";
 }
 async function apriConto(id){
-  S.conto=id;setPref("conto",id);S.imp=null;S.filtri=filtriVuoti();S.verso="tutti";S.q="";chiudi();
+  S.conto=id;setPref("conto",id);S.filtri=filtriVuoti();S.verso="tutti";S.q="";chiudi();
   if(!D.c[id]){S.msg="Carico i movimenti…";renderAll();
     try{await caricaConto(id);}catch(e){S.msg=nonPronto(e)?"<b>Database da preparare.</b><br>Esegui <code>supabase/schema.sql</code> nel SQL Editor di Supabase.":"Non riesco a caricare il conto: controlla la connessione.";console.error(e);renderAll();return;}
     if(S.conto!==id)return;
@@ -957,13 +860,12 @@ async function aggiorna(){
   for(const k in D.c)if(k!==id)delete D.c[k];
   const a=document.activeElement;
   if(sheet||(a&&a.closest&&a.closest("#main")&&/INPUT|SELECT|TEXTAREA/.test(a.tagName))){renderConti();renderTabs();if(S.tab==="movimenti")renderLista();return;}
-  if(S.imp)return;
   renderAll();
 }
 async function esci(){
   try{await sb.auth.signOut({scope:"local"});}catch(e){}
   if(chan){sb.removeChannel(chan);chan=null;}
-  D.conti=[];D.c={};S.conto=null;S.imp=null;user=null;chiudi();showLogin();
+  D.conti=[];D.c={};S.conto=null;user=null;chiudi();showLogin();
 }
 $("login-form").addEventListener("submit",async e=>{
   e.preventDefault();

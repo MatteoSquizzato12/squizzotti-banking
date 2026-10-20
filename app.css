@@ -69,7 +69,6 @@ h2{font-size:18px} h3{font-size:15px}
 .iconbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:20px;line-height:1;display:inline-grid;place-items:center;flex:none}
 .iconbtn:hover{border-color:var(--yellow)}
 .warnline{color:var(--ink);background:var(--warn-bg);border-left:3px solid var(--warn);border-radius:8px;padding:8px 12px;font-size:13.5px;margin:0}
-.okline{background:var(--soft);border-radius:8px;padding:8px 12px;font-size:13.5px;margin:0}
 .empty{text-align:center;padding:36px 18px;color:var(--muted)}
 .empty b{display:block;color:var(--ink);font-family:var(--f-display);text-transform:uppercase;font-size:16px;margin-bottom:6px}
 
@@ -221,22 +220,7 @@ table.t th{color:var(--muted);font-weight:500}
 .crow .s{font-size:12px;color:var(--muted)}
 .tag{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:999px;background:var(--chip);color:var(--muted);font-weight:700;margin-left:6px;vertical-align:1px}
 
-/* ---------- importazione ---------- */
-.drop{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;border:2px dashed var(--line);border-radius:20px;padding:28px 18px;background:var(--surface);cursor:pointer}
-.drop.over{border-color:var(--yellow);background:var(--soft)}
-.drop b{font-family:var(--f-display);text-transform:uppercase;font-size:15px}
-.drop p{margin:0;color:var(--muted);font-size:13.5px;max-width:52ch}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
-.stat{background:var(--chip);border-radius:14px;padding:10px 12px}
-.stat .v{font-size:22px;font-weight:600}
-.stat .k{font-size:12px;color:var(--muted)}
-.stat.new{background:var(--soft)}
-.irow{display:grid;grid-template-columns:22px 74px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 4px;border-top:1px solid var(--line);font-size:13px;cursor:pointer}
-.irow input{width:18px;height:18px;accent-color:var(--yellow);margin:0}
-.irow .w{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.irow.off{opacity:.55}
-details.dups{margin-top:12px}
-details.dups summary{cursor:pointer;font-weight:600;padding:6px 0}
+/* ---------- banca: movimenti arrivati ---------- */
 .hist{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:10px 2px;border-top:1px solid var(--line);font-size:13.5px}
 .hist:first-child{border-top:0}
 .hist .s{font-size:12px;color:var(--muted)}
@@ -361,4 +345,3 @@ table.heat tfoot th{text-align:left}
 @media (min-width:641px){.nav .tabs{display:none}}
 @media (max-width:640px){.menu{display:none}.topbar .conti{flex:1 1 100%}}
 #main>.card.empty:first-child,#main>.loading:first-child{margin-top:16px}
-details.riserva summary{cursor:pointer}

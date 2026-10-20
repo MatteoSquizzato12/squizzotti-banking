@@ -4,31 +4,32 @@ Web app installabile (PWA) per tenere traccia dei conti correnti di Matteo e Ann
 
 - **Frontend**: file statici pubblicati con GitHub Pages.
 - **Dati**: Supabase, stesso progetto e stessi utenti di Squizzotti's Diet. Ognuno vede **solo il proprio conto e quello comune**: la regola è nel database (Row Level Security), non solo nell'interfaccia.
-- **Import**: gli XLS esportati dall'home banking si leggono nel browser con SheetJS (`vendor/xlsx.core.min.js`, caricato solo nella sezione Importa). Il file non viene caricato da nessuna parte: arrivano a Supabase solo i movimenti confermati.
+- **Banca**: i movimenti arrivano direttamente da Banca Valsabbina tramite Enable Banking (PSD2, sola lettura). La funzione Supabase `supabase/functions/banca` custodisce la chiave privata (secret `EB_APP_ID`, `EB_PRIVATE_KEY`), gestisce il consenso e scarica i movimenti nuovi; `pg_cron` la chiama due volte al giorno (`supabase/cron-banca.sql`, secret `CRON_SECRET`).
 
-Questo repository è pubblico: **non contiene dati personali né chiavi segrete**. Gli estratti conto (`*.xls`, `*.xlsx`, `*.csv`, `*.pdf`) sono esclusi da `.gitignore`.
+Questo repository è pubblico: **non contiene dati personali né chiavi segrete**. Estratti conto (`*.xls`, `*.xlsx`, `*.csv`, `*.pdf`) e chiavi (`*.pem`) sono esclusi da `.gitignore`.
 
 ## Struttura
 
 | File | Cosa fa |
 |---|---|
 | `index.html` | Pagina, schermata di accesso |
-| `app.js` | Interfaccia: conti, panoramica, movimenti, categorie, obiettivi, importazione |
-| `js/logica.js` | Lettura XLS, chiave anti-duplicati, esercente, categorie predefinite, classificazione (usabile anche da Node) |
+| `app.js` | Interfaccia: conti, panoramica, movimenti, categorie, obiettivi, collegamento con la banca |
+| `js/logica.js` | Chiave anti-duplicati, esercente, categorie predefinite, classificazione (usabile anche da Node) |
 | `app.css` | Stile (brand Allos) |
-| `vendor/` | SheetJS Community Edition 0.20.3 (licenza Apache 2.0) |
 | `fonts/` | Akira Expanded Super Bold, licenza web di Allos |
 | `config.js` | URL e chiave publishable di Supabase |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Installazione sul telefono e uso offline |
-| `supabase/schema.sql` | Tabelle, regole di accesso e funzione di importazione |
+| `supabase/schema.sql` | Tabelle e regole di accesso |
+| `supabase/functions/banca/` | Collegamento con la banca: consenso, scelta dei conti, aggiornamento, saldo |
+| `supabase/cron-banca.sql` | Aggiornamento automatico (modello: il segreto non sta nel repository) |
 
-## Formato XLS di Banca Valsabbina
+## Dati di Banca Valsabbina
 
-Un foglio, intestazione `Data contabile | Valuta | Dare | Avere | Divisa | Causale | Descrizione`. Date come numeri di serie Excel, Dare negativo e Avere positivo. Nel file non c'è l'IBAN: il conto si sceglie nell'app, che avvisa se le carte nel file appartengono a un altro conto.
+Ogni movimento ha `remittance_information`: una delle righe è `Causale Movimento: XX` (il codice causale della banca), le altre unite da spazi formano la descrizione, identica a quella degli estratti conto XLS usati nella prima versione. Il saldo arriva dalla banca: la funzione imposta `conti.saldo_base` = saldo − somma dei movimenti bancari salvati e `conti.saldo_al`.
 
 ## Duplicati
 
-Un movimento è un duplicato se **data contabile, causale, importo e descrizione** coincidono con un movimento già salvato (`chiave`). L'anteprima esclude in automatico i duplicati e li mostra a parte; le righe identiche dentro lo stesso file vengono importate tutte (sono pagamenti veri ripetuti). Prima di salvare l'app ricontrolla il database, nel caso l'altro abbia importato lo stesso periodo nel frattempo. Ogni importazione si può annullare.
+Un movimento è un duplicato se **data contabile, causale, importo e descrizione** coincidono con un movimento già salvato (`chiave`). Il confronto tiene conto di quante volte compare una chiave: due pagamenti identici nello stesso giorno sono entrambi veri. Al primo collegamento di un conto si scarica tutto lo storico concesso dalla banca (disponibile solo nella prima ora dal consenso); poi si riparte da 10 giorni prima dell'ultimo movimento salvato.
 
 ## Categorie
 

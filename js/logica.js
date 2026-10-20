@@ -1,24 +1,9 @@
-/* Logica senza interfaccia: lettura degli XLS di Banca Valsabbina, chiave anti-duplicati,
-   esercente, categorie predefinite e classificazione. Funziona nel browser e in Node (per i test). */
+/* Logica senza interfaccia: chiave anti-duplicati, esercente, categorie predefinite e classificazione.
+   Funziona nel browser e in Node (per i test). I movimenti arrivano dalla banca: supabase/functions/banca. */
 (function(root){
 "use strict";
 
-/* ---------- lettura XLS ---------- */
-// Colonne dell'estratto conto Valsabbina: Data contabile | Valuta | Dare | Avere | Divisa | Causale | Descrizione
-const COLONNE={data:/^data\s*contabile$/i,valuta:/^(data\s*)?valuta$/i,dare:/^dare$/i,avere:/^avere$/i,divisa:/^divisa$/i,causale:/^causale$/i,descrizione:/^descrizione$/i};
-
-function dataISO(v){
-  if(v==null||v==="")return null;
-  if(typeof v==="number"){ // numero di serie Excel
-    const d=new Date(Math.round((v-25569)*86400000));
-    return d.toISOString().slice(0,10);
-  }
-  if(v instanceof Date&&!isNaN(v))return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
-  const m=String(v).trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
-  if(m){const y=m[3].length===2?"20"+m[3]:m[3];return y+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");}
-  const iso=String(v).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return iso?iso[1]+"-"+iso[2]+"-"+iso[3]:null;
-}
+// Importi scritti a mano: "1.234,56", "12,5", "€ 30".
 function numero(v){
   if(v==null||v==="")return null;
   if(typeof v==="number")return v;
@@ -29,52 +14,10 @@ function numero(v){
 }
 const pulisci=s=>String(s==null?"":s).replace(/\s+/g," ").trim();
 
-// righe = array di array (prima riga utile = intestazione). Restituisce {movimenti, scartate} oppure lancia un errore leggibile.
-function leggiRighe(righe){
-  let h=-1,col=null;
-  for(let i=0;i<Math.min(righe.length,30);i++){
-    const r=(righe[i]||[]).map(c=>pulisci(c));
-    const c={};
-    r.forEach((x,j)=>{for(const k in COLONNE)if(c[k]==null&&COLONNE[k].test(x))c[k]=j;});
-    if(c.data!=null&&c.descrizione!=null&&(c.dare!=null||c.avere!=null)){h=i;col=c;break;}
-  }
-  if(h<0)throw new Error("Non trovo le colonne dell'estratto conto (Data contabile, Dare, Avere, Descrizione). È un XLS di Banca Valsabbina?");
-  const movimenti=[];let scartate=0;
-  for(const r of righe.slice(h+1)){
-    if(!r||r.every(c=>c==null||c===""))continue;
-    const data=dataISO(r[col.data]);
-    const dare=col.dare!=null?numero(r[col.dare]):null, avere=col.avere!=null?numero(r[col.avere]):null;
-    let importo=null;
-    if(dare)importo=-Math.abs(dare); else if(avere)importo=Math.abs(avere);
-    const descrizione=pulisci(r[col.descrizione]);
-    if(!data||!importo||!descrizione){scartate++;continue;}
-    const divisa=col.divisa!=null?pulisci(r[col.divisa]):"EUR";
-    const m={data,valuta:col.valuta!=null?dataISO(r[col.valuta]):null,importo:Math.round(importo*100)/100,
-      causale:col.causale!=null?pulisci(r[col.causale]):"",descrizione,divisa:divisa||"EUR"};
-    m.chiave=chiave(m);
-    movimenti.push(m);
-  }
-  return {movimenti,scartate};
-}
-// Nel browser: XLSX = SheetJS. buffer = ArrayBuffer del file.
-function leggiXLS(XLSX,buffer){
-  const wb=XLSX.read(buffer,{type:"array"});
-  if(!wb.SheetNames.length)throw new Error("Il file è vuoto.");
-  const righe=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
-  return leggiRighe(righe);
-}
-
 /* ---------- duplicati ---------- */
 // Stesso giorno + stessa causale + stesso importo + stessa descrizione = stesso movimento.
+// La funzione "banca" calcola la stessa chiave: i movimenti già importati dagli XLS sono riconosciuti.
 function chiave(m){return [m.data,(m.causale||"").toUpperCase(),Number(m.importo).toFixed(2),pulisci(m.descrizione).toUpperCase()].join("|");}
-// Divide le righe del file: "nuovi" (mai visti) e "duplicati" (già salvati). Le righe identiche dentro lo stesso file
-// restano tutte: sono pagamenti veri ripetuti.
-function confronta(movimentiFile,chiaviSalvate){
-  const gia=new Set(chiaviSalvate);
-  const nuovi=[],duplicati=[];
-  for(const m of movimentiFile)(gia.has(m.chiave)?duplicati:nuovi).push(m);
-  return {nuovi,duplicati};
-}
 
 /* ---------- esercente / controparte ---------- */
 const TAGLIA=s=>pulisci(s).replace(/[.\s-]+$/,"");
@@ -197,6 +140,6 @@ function classifica(m,ctx){
   return {id:ok("da-classificare")||cats.find(x=>x.verso==="uscita")?.id||null,come:"predefinita"};
 }
 
-const api={dataISO,numero,leggiRighe,leggiXLS,chiave,confronta,esercente,testoRegola,categoriePredefinite,MIGRAZIONE_V2,classifica,norm};
+const api={numero,chiave,esercente,testoRegola,categoriePredefinite,MIGRAZIONE_V2,classifica,norm};
 if(typeof module!=="undefined"&&module.exports)module.exports=api; else root.Logica=api;
 })(typeof window!=="undefined"?window:globalThis);

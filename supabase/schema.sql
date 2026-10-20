@@ -1,7 +1,7 @@
 -- Squizzotti's Banking: schema del database Supabase.
 -- Da incollare una volta in Supabase → SQL Editor → New query → Run (si può rieseguire senza danni).
 -- Usa lo stesso progetto e gli stessi utenti di Squizzotti's Diet (tabella "membri").
--- Non contiene dati personali: i movimenti arrivano dall'app, caricando gli XLS della banca.
+-- Non contiene dati personali: i movimenti arrivano dalla banca (supabase/functions/banca); i primi sono stati importati da XLS.
 
 -- ---------- Chi usa l'app (già presente se c'è Squizzotti's Diet) ----------
 create table if not exists public.membri (
@@ -78,7 +78,7 @@ create table if not exists public.regole (
   unique (conto, testo)
 );
 
--- ---------- Importazioni (un XLS caricato = una riga; si può annullare) ----------
+-- ---------- Importazioni (un aggiornamento dalla banca con movimenti nuovi, o un vecchio XLS, = una riga) ----------
 create table if not exists public.importazioni (
   id bigint generated always as identity primary key,
   conto text not null references public.conti on delete cascade,
@@ -142,7 +142,7 @@ begin
   end loop;
 end $$;
 
--- ---------- Importazione di un XLS in un colpo solo ----------
+-- ---------- Importazione di un XLS in un colpo solo (prima versione, non più usata dall'app) ----------
 -- Riceve solo le righe confermate nell'anteprima (i duplicati scartati non arrivano qui).
 -- O entra tutto o niente: un errore a metà non lascia importazioni zoppe.
 create or replace function public.importa_movimenti(
