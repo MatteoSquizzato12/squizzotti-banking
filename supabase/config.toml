@@ -1,0 +1,6 @@
+# Solo per la pubblicazione della funzione "banca" (npx supabase functions deploy banca).
+project_id = "ckcbfxjsljiddplzqjpz"
+
+[functions.banca]
+# L'accesso lo controlla la funzione stessa (utente dell'app oppure header x-cron dell'aggiornamento automatico).
+verify_jwt = false

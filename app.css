@@ -361,3 +361,4 @@ table.heat tfoot th{text-align:left}
 @media (min-width:641px){.nav .tabs{display:none}}
 @media (max-width:640px){.menu{display:none}.topbar .conti{flex:1 1 100%}}
 #main>.card.empty:first-child,#main>.loading:first-child{margin-top:16px}
+details.riserva summary{cursor:pointer}

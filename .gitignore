@@ -19,3 +19,8 @@ Thumbs.db
 desktop.ini
 .vscode/
 node_modules/
+
+# Chiavi private (es. Enable Banking) e file della CLI di Supabase
+*.pem
+supabase/.temp/
+supabase/.branches/

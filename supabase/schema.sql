@@ -176,3 +176,39 @@ begin
     end if;
   end loop;
 end $$;
+
+-- ---------- Collegamento con la banca (Enable Banking, sola lettura) ----------
+-- Le scrive solo la funzione supabase/functions/banca (chiave di servizio). Dall'app si leggono e basta.
+-- saldo_al = giorno del saldo comunicato dalla banca; la funzione aggiorna anche saldo_base di conseguenza.
+alter table public.conti add column if not exists saldo_al date;
+
+-- Consensi in corso: tra il clic su «Collega la banca» e la scelta dei conti. Nessuna policy: solo la funzione.
+create table if not exists public.banca_attese (
+  state uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users on delete cascade,
+  sessione text,
+  conti jsonb,
+  scade timestamptz,
+  creato timestamptz not null default now()
+);
+alter table public.banca_attese enable row level security;
+revoke all on public.banca_attese from anon, authenticated;
+
+-- Un conto dell'app = un conto della banca. sessione e account_uid restano invisibili all'app.
+create table if not exists public.banca_collegamenti (
+  conto text primary key references public.conti on delete cascade,
+  sessione text not null,
+  account_uid text not null,
+  iban text, -- solo le ultime 4 cifre
+  scade timestamptz not null,
+  collegato timestamptz not null default now(),
+  collegato_da uuid references auth.users on delete set null,
+  ultimo_sync timestamptz,
+  esito text -- null = tutto bene; "scaduto" = consenso da rinnovare; altrimenti l'errore
+);
+alter table public.banca_collegamenti enable row level security;
+drop policy if exists "banca_collegamenti: conti visibili" on public.banca_collegamenti;
+create policy "banca_collegamenti: conti visibili" on public.banca_collegamenti
+  for select to authenticated using ((select public.puo_vedere_conto(conto)));
+revoke all on public.banca_collegamenti from anon, authenticated;
+grant select (conto, iban, scade, collegato, ultimo_sync, esito) on public.banca_collegamenti to authenticated;

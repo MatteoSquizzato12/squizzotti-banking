@@ -27,10 +27,15 @@ const mesiTra=(a,b)=>{const out=[];for(let x=a;x<=b;x=ymAdd(x,1))out.push(x);ret
 function pref(k,d){try{return localStorage.getItem("bank:"+k)||d;}catch(e){return d;}}
 function setPref(k,v){try{localStorage.setItem("bank:"+k,v);}catch(e){}}
 
+// Ritorno dalla pagina della banca (consenso Enable Banking): ?state=…&code=… oppure ?error=…
+// Si legge e si toglie dall'indirizzo prima che parta il client di Supabase.
+let ritornoBanca=(()=>{const p=new URLSearchParams(location.search);
+  const r=p.get("state")&&p.get("code")?{state:p.get("state"),code:p.get("code")}:p.get("error")?{errore:p.get("error_description")||p.get("error")}:null;
+  if(r)history.replaceState(null,"",location.pathname);return r;})();
 const sb=supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});
 let user=null,persona=null,chan=null;
 const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",dper:"12m",filtri:filtriVuoti(),lim:150,imp:null,conferma:{},msg:"Carico i conti…"};
-const D={conti:[],c:{}}; // c[conto] = {mov, cats, regole, imps, obi, mesi}
+const D={conti:[],c:{},banca:{}}; // c[conto] = {mov, cats, regole, imps, obi, mesi}; banca[conto] = collegamento con la banca
 let sheet=null;
 
 /* ===================== dati ===================== */
@@ -132,14 +137,14 @@ function renderConti(){
   $("conti").innerHTML=D.conti.map(c=>{const sub=c.id==="comune"?"Conto in comune":"Conto personale";
     return `<button class="conto" data-act="conto" data-id="${c.id}" aria-pressed="${S.conto===c.id}"><span class="av">${esc(c.nome[0])}</span><span>${esc(c.nome)}<small>${sub}</small></span></button>`;}).join("");
 }
-const ICONE={dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',altro:'<path d="M3 7h15a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 7l12-4v4"/><circle cx="16.5" cy="14" r="1.2"/>',panoramica:'<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',movimenti:'<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',categorie:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',obiettivi:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',importa:'<path d="M12 15V4M7 9l5-5 5 5M4 20h16"/>'};
+const ICONE={dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',altro:'<path d="M3 7h15a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 7l12-4v4"/><circle cx="16.5" cy="14" r="1.2"/>',panoramica:'<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',movimenti:'<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',categorie:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',obiettivi:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',banca:'<path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 21h18"/>'};
 function renderTabs(){
   const C=C0();
   const n=C?daClassificare(C.mov).length:0;
   const tabs=typeof dashOk==="function"&&dashOk()?[["dashboard","Dashboard"]]:[]; // la dashboard c'è solo su PC
   tabs.push(["panoramica","Panoramica"],["movimenti","Movimenti",n],["altro",nomeExtra()],["categorie","Categorie"]);
   if(personale())tabs.push(["obiettivi","Obiettivi"]);
-  tabs.push(["importa","Importa"]);
+  tabs.push(["banca","Banca"]);
   if(!tabs.some(t=>t[0]===S.tab))S.tab="panoramica";
   // Sul PC le sezioni stanno in un menu a tendina; sul telefono nella barra in basso (vedi app.css).
   const att=tabs.find(t=>t[0]===S.tab)||tabs[0],ic=id=>`<svg class="ti" viewBox="0 0 24 24" aria-hidden="true">${ICONE[id]}</svg>`,num=c=>c?`<span class="count" title="Da classificare">${c}</span>`:"";
@@ -156,7 +161,7 @@ function renderMain(){
   else if(S.tab==="obiettivi")el.innerHTML=vObiettivi(C);
   else if(S.tab==="altro")el.innerHTML=vAltro(C);
   else if(S.tab==="dashboard")el.innerHTML=vDashboard(C);
-  else el.innerHTML=S.imp?vAnteprima(C):vImporta(C);
+  else el.innerHTML=S.imp?vAnteprima(C):vBanca(C);
   el.insertAdjacentHTML("beforeend",`<p class="meta" style="text-align:center;margin-top:36px">Accesso come ${esc(user?.email||"")} · <button class="linkbtn" data-act="logout">Log out</button></p>`);
   disegnaGrafici();tipTorta();if(S.tab==="dashboard")disegnaDashboard();
   document.body.classList.toggle("wide",S.tab==="dashboard");
@@ -164,7 +169,7 @@ function renderMain(){
   if(on&&ml.scrollWidth>ml.clientWidth)ml.scrollLeft=on.offsetLeft-ml.offsetLeft-(ml.clientWidth-on.offsetWidth)/2;
 }
 function nessunDato(C){
-  return `<div class="card empty"><b>Nessun movimento.</b>Carica il primo XLS di Banca Valsabbina per il conto ${esc(contoNome(S.conto))}.<br><br><button class="btn" data-act="tab" data-tab="importa">Importa XLS</button>${S.tab==="movimenti"?` <button class="btn ghost" data-act="contanti-nuovo">+ ${nomeExtra()}</button>`:""}</div>`;
+  return `<div class="card empty"><b>Nessun movimento.</b>Collega il conto ${esc(contoNome(S.conto))} a Banca Valsabbina: i movimenti arriveranno da soli.<br><br><button class="btn" data-act="tab" data-tab="banca">Collega la banca</button>${S.tab==="movimenti"?` <button class="btn ghost" data-act="contanti-nuovo">+ ${nomeExtra()}</button>`:""}</div>`;
 }
 // Mese/Anno + una casella per ogni anno con movimenti e (in modalità Mese) per ogni mese dell'anno scelto.
 function barraPeriodo(conTutto){
@@ -215,18 +220,20 @@ function vPanoramica(C){
 // Una barra per categoria principale. Se ha sottocategorie si apre e mostra il dettaglio.
 /* ---------- numeri del conto ---------- */
 // Saldo del conto corrente = saldo_base del conto + somma dei movimenti della banca (senza voci scritte a mano).
-// L'XLS non riporta il saldo: saldo_base (impostato in Supabase) è il saldo prima del primo movimento importato.
+// saldo_base è il saldo prima del primo movimento salvato: con il collegamento alla banca lo ricalcola la funzione
+// "banca" a ogni aggiornamento (saldo_al = giorno del saldo letto dalla banca), così il totale è quello dell'home banking.
 const daBanca=m=>m.causale!==CONTANTI&&m.causale!==RETTIFICA;
 const contoAttivo=()=>D.conti.find(c=>c.id===S.conto)||{};
 const sommaBanca=(C,fino)=>C.mov.filter(m=>daBanca(m)&&(!fino||m.data<=fino)).reduce((s,m)=>s+m.importo,0);
 function saldi(C){
   const base=Number(contoAttivo().saldo_base||0),banca=C.mov.filter(daBanca),extra=C.mov.filter(m=>m.causale===CONTANTI);
-  return {banca:base+sommaBanca(C),base,al:banca.reduce((a,m)=>m.data>a?m.data:a,""),altro:extra.reduce((s,m)=>s+m.importo,0),nAltro:extra.length};
+  const al=banca.reduce((a,m)=>m.data>a?m.data:a,""),sal=contoAttivo().saldo_al;
+  return {banca:base+sommaBanca(C),base,al:sal&&sal>al?sal:al,dallaBanca:!!sal,altro:extra.reduce((s,m)=>s+m.importo,0),nAltro:extra.length};
 }
 function cardSaldi(C){
   const x=saldi(C),nome=nomeExtra();
   return `<div class="card saldi"><div class="card-head"><h2 class="dotted">Numeri del conto</h2></div>
-  <div class="saldigrid${S.conto==="comune"?" uno":""}"><div class="saldo" title="Somma dei movimenti della banca importati, fino all'ultimo XLS"><div class="k">Saldo conto corrente</div><div class="big num">${eur(x.banca)}</div><div class="d">${x.al?"al "+giorno(x.al):"nessun movimento importato"}</div></div>
+  <div class="saldigrid${S.conto==="comune"?" uno":""}"><div class="saldo" title="${x.dallaBanca?"Saldo comunicato da Banca Valsabbina all'ultimo aggiornamento":"Somma dei movimenti della banca salvati"}"><div class="k">Saldo conto corrente</div><div class="big num">${eur(x.banca)}</div><div class="d">${x.al?"al "+giorno(x.al):"nessun movimento salvato"}</div></div>
   ${S.conto==="comune"?"":`<div class="saldo"><div class="k">Saldo ${nome}</div><div class="big num">${eurS(x.altro)}</div></div>`}</div></div>`;
 }
 /* ---------- ciambella delle uscite ---------- */
@@ -633,17 +640,109 @@ function caricaXLSX(){
   return xlsxP||=new Promise((ok,ko)=>{const s=document.createElement("script");s.src="vendor/xlsx.core.min.js";
     s.onload=()=>ok(window.XLSX);s.onerror=()=>{xlsxP=null;s.remove();ko(new Error("Non riesco a caricare il lettore XLS: controlla la connessione."));};document.head.appendChild(s);});
 }
-function vImporta(C){
-  const nome=contoNome(S.conto);
-  let h=`<label class="drop" id="drop" style="margin-top:16px"><b>Carica l'XLS del conto ${esc(nome)}</b>
-    <p>Dall'home banking di Banca Valsabbina scarica l'estratto conto in formato XLS e sceglilo qui. Prima di salvare vedi un'anteprima: i movimenti già importati sono esclusi in automatico.</p>
-    <span class="btn">Scegli il file</span><input type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-file hidden></label>`;
-  h+=`<div class="card" style="margin-top:14px"><div class="card-head"><h2 class="dotted">File caricati</h2>${C.primo?`<p class="meta">movimenti dal ${giorno(C.mov[C.mov.length-1].data)} al ${giorno(C.mov[0].data)}</p>`:""}</div>`;
-  if(!C.imps.length)h+=`<p class="meta">Nessun file ancora.</p>`;
+/* ---------- collegamento con la banca ---------- */
+// Tutto passa dalla funzione Supabase "banca" (supabase/functions/banca): la chiave di Enable Banking non è nel browser.
+async function funzioneBanca(azione,dati){
+  const {data,error}=await sb.functions.invoke("banca",{body:{azione,...dati}});
+  if(error){let m=error.message;try{const j=await error.context.json();if(j.errore)m=j.errore;}catch(e){}throw new Error(m);}
+  return data;
+}
+async function caricaCollegamenti(){
+  const {data,error}=await sb.from("banca_collegamenti").select("conto,iban,scade,collegato,ultimo_sync,esito");
+  D.banca=error?{}:Object.fromEntries(data.map(c=>[c.conto,c])); // tabella assente = schema.sql non ancora rieseguito
+}
+async function ricaricaConti(){
+  const {data}=await sb.from("conti").select("*");
+  if(data)D.conti=D.conti.map(c=>data.find(x=>x.id===c.id)||c);
+}
+const quando=ts=>{const d=new Date(ts),o=new Date(),ieri=new Date(o.getTime()-864e5),ora=d.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+  return d.toDateString()===o.toDateString()?"oggi alle "+ora:d.toDateString()===ieri.toDateString()?"ieri alle "+ora:giorno(d.toISOString().slice(0,10))+" alle "+ora;};
+const giorniA=ts=>Math.ceil((new Date(ts)-Date.now())/864e5);
+function cardBanca(){
+  const c=D.banca[S.conto],nome=esc(contoNome(S.conto)),occ=S.banca;
+  if(!c)return `<div class="card" style="margin-top:16px"><div class="card-head"><h2 class="dotted">Collegamento con la banca</h2></div>
+    <p>Collega il conto ${nome} a Banca Valsabbina: i movimenti nuovi arriveranno da soli due volte al giorno, senza scaricare file.</p>
+    <p class="hint" style="margin:8px 0 14px">Sola lettura: l'app vede movimenti e saldo, non può disporre pagamenti. Il consenso si dà sul sito della banca, vale 6 mesi e passa da Enable Banking, un intermediario autorizzato.</p>
+    <button class="btn" data-act="banca-collega" ${occ?"disabled":""}>${occ==="collega"?"Apro la banca…":"Collega la banca"}</button></div>`;
+  const gg=giorniA(c.scade),scaduto=c.esito==="scaduto"||gg<=0,conf=S.conferma.scollega&&Date.now()-S.conferma.scollega<4000;
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2 class="dotted">Collegamento con la banca</h2></div>
+    <div class="facts"><div><span>Banca</span> Banca Valsabbina${c.iban?" · conto …"+esc(c.iban):""}</div>
+    <div><span>Ultimo aggiornamento</span> ${c.ultimo_sync?quando(c.ultimo_sync):"mai"}</div>
+    <div><span>Consenso valido fino al</span> ${giorno(c.scade.slice(0,10))}</div></div>
+    ${scaduto?`<p class="warnline" style="margin-top:10px">Il consenso della banca è scaduto: i movimenti non arrivano più. Tocca «Rinnova il consenso» e rifai l'accesso alla banca.</p>`
+      :gg<=21?`<p class="warnline" style="margin-top:10px">Il consenso scade tra ${gg} ${gg===1?"giorno":"giorni"}: rinnovalo per non perdere aggiornamenti.</p>`
+      :c.esito?`<p class="warnline" style="margin-top:10px">L'ultimo aggiornamento non è riuscito: ${esc(c.esito)}</p>`:""}
+    <div class="sh-foot" style="flex-wrap:wrap"><button class="btn ${conf?"danger":"ghost"} small" data-act="banca-scollega">${conf?"Tocca di nuovo per scollegare":"Scollega"}</button><span class="grow"></span>
+    <button class="btn ${scaduto||gg<=21?"":"ghost"}" data-act="banca-collega" ${occ?"disabled":""}>${occ==="collega"?"Apro la banca…":"Rinnova il consenso"}</button>
+    ${scaduto?"":`<button class="btn" data-act="banca-aggiorna" ${occ?"disabled":""}>${occ==="aggiorna"?"Aggiorno…":"Aggiorna ora"}</button>`}</div></div>`;
+}
+function vBanca(C){
+  let h=cardBanca();
+  h+=`<div class="card" style="margin-top:14px"><div class="card-head"><h2 class="dotted">Movimenti arrivati</h2>${C.primo?`<p class="meta">movimenti dal ${giorno(C.mov[C.mov.length-1].data)} al ${giorno(C.mov[0].data)}</p>`:""}</div>`;
+  if(!C.imps.length)h+=`<p class="meta">Ancora nessuno.</p>`;
   else h+=C.imps.map(i=>{const k="imp"+i.id,conf=S.conferma[k]&&Date.now()-S.conferma[k]<4000;
-    return `<div class="hist"><div><b>${esc(i.nome_file||"XLS")}</b><div class="s">${i.dal?giorno(i.dal)+" – "+giorno(i.al):""} · ${i.righe_importate} importati${i.righe_duplicate?` · ${i.righe_duplicate} duplicati esclusi`:""} · caricato il ${new Date(i.caricato).toLocaleDateString("it-IT")}</div></div>
-    <button class="btn ${conf?"danger":"ghost"} small" data-act="imp-annulla" data-id="${i.id}">${conf?"Conferma: cancella i suoi movimenti":"Annulla importazione"}</button></div>`;}).join("");
-  return h+`</div>`;
+    return `<div class="hist"><div><b>${esc(i.nome_file||"XLS")}</b><div class="s">${i.dal?giorno(i.dal)+" – "+giorno(i.al):""} · ${i.righe_importate} ${i.righe_importate===1?"nuovo":"nuovi"}${i.righe_duplicate?` · ${i.righe_duplicate} già presenti`:""} · ${new Date(i.caricato).toLocaleDateString("it-IT")}</div></div>
+    <button class="btn ${conf?"danger":"ghost"} small" data-act="imp-annulla" data-id="${i.id}">${conf?"Conferma: cancella i suoi movimenti":"Annulla"}</button></div>`;}).join("");
+  h+=`</div>`;
+  // Riserva finché il collegamento non è collaudato: poi si toglie.
+  h+=`<details class="card riserva" style="margin-top:14px"><summary><b>Importa da file XLS</b> <span class="meta">(riserva)</span></summary>
+    <label class="drop" id="drop" style="margin-top:12px"><b>Carica l'XLS del conto ${esc(contoNome(S.conto))}</b>
+    <p>Dall'home banking di Banca Valsabbina scarica l'estratto conto in formato XLS e sceglilo qui. Prima di salvare vedi un'anteprima: i movimenti già presenti sono esclusi in automatico.</p>
+    <span class="btn">Scegli il file</span><input type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-file hidden></label></details>`;
+  return h;
+}
+async function bancaCollega(){
+  S.banca="collega";renderMain();
+  try{const {url}=await funzioneBanca("avvia");location.href=url;}
+  catch(e){S.banca=null;renderMain();toast("Non riesco ad aprire la banca: "+e.message);}
+}
+const riassunto=esiti=>{const ok=esiti.filter(x=>!x.errore),n=ok.reduce((s,x)=>s+x.nuovi,0),ko=esiti.find(x=>x.errore);
+  return ko?`${contoNome(ko.conto)}: ${ko.errore}`:n?`Arrivati ${n} ${n===1?"movimento nuovo":"movimenti nuovi"}.`:"Nessun movimento nuovo: il conto è già aggiornato.";};
+async function dopoBanca(esiti){
+  await Promise.all([caricaCollegamenti(),ricaricaConti()]);
+  for(const k in D.c)if(k!==S.conto)delete D.c[k];
+  await caricaConto(S.conto).catch(()=>{});
+  S.banca=null;renderAll();toast(riassunto(esiti));
+}
+async function bancaAggiorna(){
+  S.banca="aggiorna";renderMain();
+  try{const {esiti}=await funzioneBanca("aggiorna",{conto:S.conto});await dopoBanca(esiti);}
+  catch(e){S.banca=null;renderMain();toast("Aggiornamento non riuscito: "+e.message);}
+}
+async function bancaScollega(){
+  if(!(S.conferma.scollega&&Date.now()-S.conferma.scollega<4000)){S.conferma.scollega=Date.now();renderMain();setTimeout(()=>{if(S.tab==="banca")renderMain();},4100);return;}
+  try{await funzioneBanca("scollega",{conto:S.conto});await caricaCollegamenti();renderMain();toast("Conto scollegato: i movimenti già arrivati restano.");}
+  catch(e){toast("Non riesco a scollegare: "+e.message);}
+}
+// Al ritorno dalla banca: apre la sessione e chiede a quale conto dell'app va ogni conto visto nel consenso.
+async function confermaBanca(r){
+  S.tab="banca";
+  if(r.errore){renderAll();toast("La banca non ha dato il consenso: "+r.errore);return;}
+  toast("Collegamento in corso…");
+  try{
+    const {conti}=await funzioneBanca("conferma",r);
+    const usati=new Set();
+    const scelte=conti.map(c=>{const s=D.conti.some(x=>x.id===c.suggerito)&&!usati.has(c.suggerito)?c.suggerito:"";if(s)usati.add(s);return s;});
+    sheet={tipo:"abbina",state:r.state,conti,scelte};renderAll();renderSheet();
+  }catch(e){renderAll();toast("Collegamento non riuscito: "+e.message);}
+}
+function sheetAbbina(){
+  const ok=sheet.scelte.some(Boolean);
+  return `<div class="sh-head"><div><div class="eyebrow">Banca Valsabbina</div><h2>Quali conti colleghi?</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
+  <p class="hint">Per ogni conto della banca scegli il conto dell'app in cui far arrivare i movimenti. I movimenti già presenti non vengono duplicati.</p>
+  ${sheet.conti.map((c,i)=>`<div class="sec"><h3>${esc(c.nome||"Conto")}${c.iban?` <span class="meta">· …${esc(c.iban)}</span>`:""}</h3>
+    <div class="chips">${D.conti.map(x=>`<button class="chip" data-act="abbina-scegli" data-i="${i}" data-conto="${x.id}" aria-pressed="${sheet.scelte[i]===x.id}">${esc(x.nome)}</button>`).join("")}
+    <button class="chip" data-act="abbina-scegli" data-i="${i}" data-conto="" aria-pressed="${!sheet.scelte[i]}">Non collegare</button></div></div>`).join("")}
+  <div class="sh-foot"><span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="abbina-ok" id="abbina-ok" ${ok&&!sheet.occ?"":"disabled"}>${sheet.occ?"Scarico i movimenti…":"Collega e scarica i movimenti"}</button></div>`;
+}
+async function abbina(){
+  sheet.occ=true;renderSheet();
+  try{
+    const {esiti}=await funzioneBanca("abbina",{state:sheet.state,scelte:sheet.conti.map((c,i)=>({uid:c.uid,conto:sheet.scelte[i]}))});
+    const primo=sheet.scelte.find(Boolean);chiudi();
+    if(primo&&primo!==S.conto){S.conto=primo;setPref("conto",primo);}
+    await dopoBanca(esiti);
+  }catch(e){sheet.occ=false;renderSheet();toast("Collegamento non riuscito: "+e.message);}
 }
 async function chiaviInPeriodo(dal,al){
   const rows=await tutte(()=>sb.from("movimenti").select("chiave").eq("conto",S.conto).gte("data",dal).lte("data",al));
@@ -715,7 +814,7 @@ async function confermaImport(){
 }
 async function annullaImport(id){
   const k="imp"+id;
-  if(!(S.conferma[k]&&Date.now()-S.conferma[k]<4000)){S.conferma[k]=Date.now();renderMain();setTimeout(()=>{if(S.tab==="importa"&&!S.imp)renderMain();},4100);return;}
+  if(!(S.conferma[k]&&Date.now()-S.conferma[k]<4000)){S.conferma[k]=Date.now();renderMain();setTimeout(()=>{if(S.tab==="banca"&&!S.imp)renderMain();},4100);return;}
   const {error}=await sb.from("importazioni").delete().eq("id",id);if(error)return errore(error);
   await caricaConto(S.conto);renderAll();toast("Importazione annullata: i suoi movimenti sono stati cancellati.");
 }
@@ -723,7 +822,7 @@ async function annullaImport(id){
 /* ===================== pannello, messaggi ===================== */
 function renderSheet(){
   if(!sheet){$("overlay").hidden=true;return;}
-  const html=sheet.tipo==="mov"?sheetMov():sheet.tipo==="contanti"?sheetContanti():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheetObi();
+  const html=sheet.tipo==="mov"?sheetMov():sheet.tipo==="contanti"?sheetContanti():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheet.tipo==="abbina"?sheetAbbina():sheetObi();
   if(!sheet)return;
   const el=$("sheet"),top=el.scrollTop;el.innerHTML=html;$("overlay").hidden=false;el.scrollTop=top;
   document.body.style.overflow="hidden";
@@ -785,6 +884,11 @@ document.addEventListener("click",e=>{
   else if(a==="imp-tutti"){const I=S.imp,nuove=I.righe.map((m,i)=>i).filter(i=>!I.righe[i].dup),tutte=nuove.every(i=>I.sel.has(i));nuove.forEach(i=>tutte?I.sel.delete(i):I.sel.add(i));renderMain();}
   else if(a==="imp-conferma")confermaImport();
   else if(a==="imp-annulla")annullaImport(+b.dataset.id);
+  else if(a==="banca-collega")bancaCollega();
+  else if(a==="banca-aggiorna")bancaAggiorna();
+  else if(a==="banca-scollega")bancaScollega();
+  else if(a==="abbina-scegli"){const i=+b.dataset.i,c=b.dataset.conto;sheet.scelte=sheet.scelte.map((x,j)=>j===i?c:c&&x===c?"":x);renderSheet();} // un conto dell'app riceve un solo conto della banca
+  else if(a==="abbina-ok")abbina();
 });
 document.addEventListener("input",e=>{
   const t=e.target;
@@ -836,7 +940,9 @@ async function start(){
   D.conti=conti.sort((a,b)=>(ord[a.id]??2)-(ord[b.id]??2));
   if(typeof dashOk==="function"&&dashOk())S.tab="dashboard";
   const pref0=pref("conto","");
+  await caricaCollegamenti();
   await apriConto(D.conti.some(c=>c.id===pref0)?pref0:D.conti[0].id);
+  if(ritornoBanca){const r=ritornoBanca;ritornoBanca=null;confermaBanca(r);}
   if(chan)sb.removeChannel(chan);
   let t;const ricarica=()=>{clearTimeout(t);t=setTimeout(aggiorna,900);};
   chan=sb.channel("banking");
@@ -846,7 +952,7 @@ async function start(){
 // Riallinea il conto aperto con il database senza disturbare chi sta scrivendo.
 async function aggiorna(){
   const id=S.conto;if(!id||!D.c[id])return;
-  try{await caricaConto(id);}catch(e){return;}
+  try{await Promise.all([caricaConto(id),caricaCollegamenti(),ricaricaConti()]);}catch(e){return;}
   if(id!==S.conto)return;
   for(const k in D.c)if(k!==id)delete D.c[k];
   const a=document.activeElement;
