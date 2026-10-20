@@ -176,7 +176,7 @@ function renderLato(menu,sel,ic){
   const altro=S.tab==="altro";
   const conti=D.conti.map(c=>{const C=D.c[c.id],x=C?saldi(C,c.id):null,iban=(D.banca[c.id]||{}).conto?.iban,on=c.id===S.conto;
     return `<button class="lconto${on?" sel":""}" data-act="conto" data-id="${c.id}" aria-pressed="${on}"><small>${c.id==="comune"?"Conto in comune":"Conto personale"}${iban?" · **** "+esc(iban):""}</small>
-      <b>${esc(c.nome)}</b><span class="lc-k">${altro?"Saldo "+nomeExtraDi(c.id):"Saldo contabile"}</span><span class="lc-v num">${x?(altro?eurS(x.altro):eur(x.banca)):"…"}</span></button>`;}).join("");
+      <b>${esc(c.nome)}</b><span class="lc-k">${altro?"Saldo "+nomeExtraDi(c.id):"Saldo contabile"}</span><span class="lc-v num">${x?(altro?eurS(x.altro):eur(x.banca)):"…"}</span>${!altro&&C&&statoPrepagata(C)?`<span class="lc-p">Prepagata · stima ${eur(statoPrepagata(C).stima)}</span>`:""}</button>`;}).join("");
   el.innerHTML=`<div class="lato-brand">${LOGO}<b>Squizzotti's Banking</b></div>
     <p class="lato-tit">Conti</p><div class="lato-conti">${conti}</div>
     <p class="lato-tit">Sezioni</p><nav class="lato-nav">${menu.map(([id,t,c])=>`<button class="menuitem" data-act="tab" data-tab="${id}" aria-current="${sel===id}">${ic(id)}<span>${t}</span>${c?`<span class="count" title="Da classificare">${c}</span>`:""}</button>`).join("")}</nav>
@@ -217,6 +217,11 @@ let scT;document.addEventListener("scroll",e=>{
     for(const c of el.querySelectorAll(".cartaconto")){const m=c.offsetLeft-el.offsetLeft+c.offsetWidth/2,dd=Math.abs(m-mezzo);if(dd<dist){dist=dd;best=c;}}
     if(best&&best.dataset.id!==S.conto)apriConto(best.dataset.id);},140);
 },true);
+// «Altro» si apre sul periodo Anno (PC e telefono); uscendo si torna al periodo scelto nelle altre sezioni.
+function cambiaPeriodoAltro(da,a){
+  if(a==="altro"&&da!=="altro"){S.perPrima=S.per;S.per="anno";}
+  else if(da==="altro"&&a!=="altro"){S.per=S.perPrima||"mese";}
+}
 function nessunDato(C){
   return `<div class="card empty"><b>Nessun movimento</b>Collega il conto ${esc(contoNome(S.conto))} a Banca Valsabbina: i movimenti arriveranno da soli.<br><br><button class="btn" data-act="tab" data-tab="banca">Collega la banca</button>${S.tab==="movimenti"?` <button class="btn ghost" data-act="contanti-nuovo">+ ${nomeExtra()}</button>`:""}</div>`;
 }
@@ -274,7 +279,7 @@ function vPanoramica(C){
   if(S.per==="tutto")S.per="anno";
   const T=totPeriodo(),ms=visibili(),todo=daClassificare(ms).length;
   const quota=T.e>0?Math.round(T.r/T.e*100):null;
-  let h=cardConti("banca")+promemoriaPrepagata(C)+cardUltimi(C)+barraPeriodo(false);
+  let h=cardConti("banca")+cardPrepagata(C)+promemoriaPrepagata(C)+cardUltimi(C)+barraPeriodo(false);
   if(todo)h+=`<div class="banner"><p><b>${todo} ${todo===1?"movimento":"movimenti"} da classificare</b> in questo periodo. Ogni correzione insegna all'app a riconoscerli da sola.</p><button class="btn small" data-act="vai-todo">Classifica ora</button></div>`;
   const PV="polizza-vita",pv=C.mov.some(m=>m._c.id===PV||radice(m._c.id)===PV);
   const pvSomma=ms=>-ms.filter(m=>m._c.id===PV||radice(m._c.id)===PV).reduce((s,m)=>s+m.importo,0);
@@ -321,8 +326,8 @@ function cartaConto(c,modo){
   let k,v,d;
   if(modo==="altro"){k="Saldo "+nomeExtraDi(c.id);v=x?eurS(x.altro):"…";d=x?`${x.nAltro} ${x.nAltro===1?"movimento":"movimenti"} fuori banca`:"";}
   else{k="Saldo contabile";v=x?eur(x.banca):"…";d=x?(x.al?"al "+giorno(x.al):"nessun movimento salvato"):"";
-    const carta=C?C.mov.filter(m=>m.causale===CARTA):[]; // saldo della prepagata = somma dei suoi movimenti contabilizzati
-    if(c.carta_saldo_al!=null)d+=` · prepagata ${eur(Number(c.carta_saldo||0))}`;else if(carta.length)d+=` · prepagata ${eur(carta.reduce((t,m)=>t+m.importo,0))}`;}
+    const P=C&&statoPrepagata(C);
+    if(c.carta_saldo_al!=null)d+=` · prepagata ${eur(Number(c.carta_saldo||0))}`;else if(P)d+=` · prepagata ${eur(P.stima)}`;}
   return `<div class="cartaconto${sel?" sel":""}" role="button" tabindex="0" data-act="conto" data-id="${c.id}" aria-pressed="${sel}" aria-label="${esc(c.nome)}">
     <div class="cc-top"><div><small>${modo==="altro"?nomeExtraDi(c.id)+" · fuori banca":tipo}</small><b>${esc(c.nome)}</b></div>${sel?bottoneOcchio():""}</div>
     <div class="cc-num">${modo==="altro"?"Entrate e uscite scritte a mano":iban?"Conto n. **** **** "+esc(iban):"Banca Valsabbina · conto da collegare"}</div>
@@ -902,6 +907,28 @@ async function annullaImport(id){
   const {error}=await sb.from("importazioni").delete().eq("id",id);if(error)return errore(error);
   await caricaConto(S.conto);renderAll();toast("File annullato: i suoi movimenti sono stati cancellati.");
 }
+// Quanti soldi ci sono sulla prepagata, in base agli Excel caricati: somma dei movimenti contabilizzati della carta
+// + le ricariche partite dal conto dopo l'ultimo movimento dell'Excel (la banca le manda ogni giorno, la carta no).
+// Le spese fatte con la carta dopo quella data non si conoscono finché non arriva il file del mese.
+function statoPrepagata(C){
+  const ms=C.mov.filter(m=>m.causale===CARTA);if(!ms.length)return null;
+  const al=ms.reduce((a,m)=>m.data>a?m.data:a,""),base=ms.reduce((t,m)=>t+m.importo,0);
+  const imp=C.imps.find(i=>PREPAGATA_XLS.test(i.nome_file||"")),carta=(String(imp?.nome_file||"").match(/(\d{4})/)||[])[1]||"";
+  // causale 2U = ricarica prepagata (le commissioni della ricarica hanno un'altra causale)
+  const dopo=C.mov.filter(m=>m.data>al&&m.causale==="2U"&&m.importo<0&&(!carta||String(m.descrizione).includes(carta)));
+  const ric=-dopo.reduce((t,m)=>t+m.importo,0),mese=al.slice(0,7),mm=ms.filter(m=>m.data.startsWith(mese));
+  return {carta,al,base,ric,nRic:dopo.length,stima:base+ric,file:imp?.caricato||null,
+    mese,entrate:mm.filter(m=>m.importo>0).reduce((t,m)=>t+m.importo,0),spese:-mm.filter(m=>m.importo<0).reduce((t,m)=>t+m.importo,0)};
+}
+function cardPrepagata(C){
+  const P=statoPrepagata(C);if(!P)return "";
+  return `<div class="card prepagata"><div class="pp-testa"><span class="ric">${icona("altro","oi")}</span><div class="pp-nome"><small>Carta prepagata${P.carta?" · **** "+esc(P.carta):""}</small><b>Saldo stimato</b></div><div class="pp-v num">${eur(P.stima)}</div></div>
+    <div class="pp-righe"><div><span>Dall'Excel, movimenti fino al ${giorno(P.al)}</span><b class="num">${eur(P.base)}</b></div>
+    ${P.nRic?`<div><span>${P.nRic===1?"Ricarica partita":"Ricariche partite"} dal conto dopo quella data</span><b class="num">${segno("+",P.ric)}${eur(P.ric)}</b></div>`:""}
+    <div><span>Ricariche di ${MESI[+P.mese.slice(5)-1]}</span><b class="num">${segno("+",P.entrate)}${eur(P.entrate)}</b></div>
+    <div><span>Spese di ${MESI[+P.mese.slice(5)-1]}</span><b class="num">${segno("−",P.spese)}${eur(P.spese)}</b></div></div>
+    <p class="hint">${P.file?"Ultimo Excel caricato il "+new Date(P.file).toLocaleDateString("it-IT")+". ":""}Le spese fatte con la carta dopo il ${giorno(P.al)} arrivano con il prossimo file di Nexi.</p></div>`;
+}
 // Promemoria in Dashboard: dal 1° del mese, finché non si carica l'Excel della prepagata (per i conti che la usano).
 function promemoriaPrepagata(C){
   if(!C.mov.some(m=>m.causale===CARTA))return "";
@@ -986,7 +1013,7 @@ document.addEventListener("click",e=>{
   if(!C0()&&a!=="conto")return;
   if(a==="menu"){S.menu=!S.menu;renderTabs();return;}
   if(a==="conto"){if(S.conto!==b.dataset.id)apriConto(b.dataset.id);}
-  else if(a==="tab"){S.menu=false;S.tab=b.dataset.tab;S.lim=150;nascondiTip();renderAll();scrollTo({top:0});}
+  else if(a==="tab"){S.menu=false;cambiaPeriodoAltro(S.tab,b.dataset.tab);S.tab=b.dataset.tab;S.lim=150;nascondiTip();renderAll();scrollTo({top:0});}
   else if(a==="per"){S.per=b.dataset.per;S.lim=150;renderMain();}
   else if(a==="mese"){S.mese=b.dataset.ym;S.per="mese";S.lim=150;nascondiTip();renderMain();}
   else if(a==="anno")scegliAnno(b.dataset.y);

@@ -455,3 +455,16 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
   #main{min-width:0}
   #main>.carosello,#main>.puntini{display:none} /* i conti stanno nella colonna laterale */
 }
+
+/* ---------- prepagata: saldo stimato (Dashboard) ---------- */
+.card.prepagata{margin-bottom:14px;padding:16px 18px}
+.pp-testa{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:12px;align-items:center}
+.pp-nome small{display:block;font-size:12px;color:var(--muted)}
+.pp-nome b{font-weight:700}
+.pp-v{font-size:24px;font-weight:700;white-space:nowrap}
+.pp-righe{margin-top:12px;border-top:1px solid var(--line)}
+.pp-righe div{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.pp-righe span{color:var(--muted)}
+.pp-righe b{font-weight:600;white-space:nowrap}
+.card.prepagata .hint{margin:8px 0 0}
+.lc-p{font-size:12px;opacity:.8;margin-top:4px;padding-top:6px;border-top:1px solid currentColor;border-top-color:color-mix(in srgb,currentColor 20%,transparent)}
