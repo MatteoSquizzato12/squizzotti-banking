@@ -15,9 +15,12 @@ const filtriVuoti=()=>({cats:[],min:"",max:"",nota:false,manuale:false});
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const EUR=new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"});
-const eur=n=>EUR.format(Math.abs(n)<0.005?0:n);
-const eurS=n=>(n>0.004?"+":"")+eur(n);
-const compatto=n=>Math.abs(n)>=1000?(n/1000).toLocaleString("it-IT",{maximumFractionDigits:1})+"k":String(Math.round(n));
+// Importi nascosti (occhio, come nelle app delle banche): ogni cifra in euro passa da qui, grafici compresi.
+const COPERTO="••••• €";
+const eur=n=>S.nascosto?COPERTO:EUR.format(Math.abs(n)<0.005?0:n);
+const eurS=n=>S.nascosto?COPERTO:(n>0.004?"+":"")+eur(n);
+const segno=(s,n)=>S.nascosto||n<=0.004?"":s; // "+" / "−" davanti a un importo, se si vede
+const compatto=n=>S.nascosto?"•":Math.abs(n)>=1000?(n/1000).toLocaleString("it-IT",{maximumFractionDigits:1})+"k":String(Math.round(n));
 const ymAdd=(ym,n)=>{let [y,m]=ym.split("-").map(Number);m+=n;while(m>12){m-=12;y++;}while(m<1){m+=12;y--;}return y+"-"+String(m).padStart(2,"0");};
 const ymOggi=()=>{const t=new Date();return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0");};
 const ymNome=ym=>MESI[+ym.slice(5,7)-1]+" "+ym.slice(0,4);
@@ -35,7 +38,7 @@ let ritornoBanca=(()=>{const p=new URLSearchParams(location.search);
   if(r)history.replaceState(null,"",location.pathname);return r;})();
 const sb=supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});
 let user=null,persona=null,chan=null;
-const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",dper:"12m",filtri:filtriVuoti(),lim:150,conferma:{},msg:"Carico i conti…"};
+const S={conto:null,tab:"panoramica",per:"mese",mese:ymOggi(),q:"",verso:"tutti",dper:"12m",filtri:filtriVuoti(),lim:150,conferma:{},msg:"Carico i conti…",nascosto:pref("nascosto","0")==="1"};
 const D={conti:[],c:{},banca:{}}; // c[conto] = {mov, cats, regole, imps, obi, mesi}; banca[conto] = collegamento con la banca
 let sheet=null;
 
@@ -138,39 +141,54 @@ function renderConti(){
   $("conti").innerHTML=D.conti.map(c=>{const sub=c.id==="comune"?"Conto in comune":"Conto personale";
     return `<button class="conto" data-act="conto" data-id="${c.id}" aria-pressed="${S.conto===c.id}"><span class="av">${esc(c.nome[0])}</span><span>${esc(c.nome)}<small>${sub}</small></span></button>`;}).join("");
 }
-const ICONE={dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',altro:'<path d="M3 7h15a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 7l12-4v4"/><circle cx="16.5" cy="14" r="1.2"/>',panoramica:'<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',movimenti:'<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',categorie:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',obiettivi:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',banca:'<path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 21h18"/>'};
+const ICONE={dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',altro:'<path d="M3 7h15a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 7l12-4v4"/><circle cx="16.5" cy="14" r="1.2"/>',panoramica:'<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',movimenti:'<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',categorie:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',obiettivi:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',banca:'<path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 21h18"/>',
+  impostazioni:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  account:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  privacy:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  coperto:'<path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  documento:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+  esci:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'};
+const icona=(id,cl="ti")=>`<svg class="${cl}" viewBox="0 0 24 24" aria-hidden="true">${ICONE[id]}</svg>`;
+// Pagine che non stanno nella barra: si aprono da un'altra sezione e hanno il tasto «indietro».
+const PADRE={movimenti:"panoramica",banca:"impostazioni",categorie:"impostazioni"};
+const TITOLI={movimenti:"Movimenti",banca:"Collegamento banca",categorie:"Categorie e regole"};
 function renderTabs(){
   const C=C0();
-  const n=C?daClassificare(C.mov).length:0;
-  const tabs=typeof dashOk==="function"&&dashOk()?[["dashboard","Dashboard"]]:[]; // la dashboard c'è solo su PC
-  tabs.push(["panoramica","Panoramica"],["movimenti","Movimenti",n],["altro",nomeExtra()],["categorie","Categorie"]);
-  if(personale())tabs.push(["obiettivi","Obiettivi"]);
-  tabs.push(["banca","Banca"]);
-  if(!tabs.some(t=>t[0]===S.tab))S.tab="panoramica";
-  // Sul PC le sezioni stanno in un menu a tendina; sul telefono nella barra in basso (vedi app.css).
-  const att=tabs.find(t=>t[0]===S.tab)||tabs[0],ic=id=>`<svg class="ti" viewBox="0 0 24 24" aria-hidden="true">${ICONE[id]}</svg>`,num=c=>c?`<span class="count" title="Da classificare">${c}</span>`:"";
-  $("tabs").innerHTML=C?`<div class="menu"><button class="menubtn" data-act="menu" aria-haspopup="menu" aria-expanded="${!!S.menu}">${ic(att[0])}<span>${att[1]}</span>${num(att[2])}<span class="caret" aria-hidden="true">▾</span></button>
-    ${S.menu?`<div class="menulist" role="menu">${tabs.map(([id,t,c])=>`<button role="menuitem" class="menuitem" data-act="tab" data-tab="${id}" aria-current="${S.tab===id}">${ic(id)}<span>${t}</span>${num(c)}</button>`).join("")}</div>`:""}</div>
-    <div class="tabs" role="tablist">${tabs.map(([id,t,c])=>`<button class="tab" role="tab" data-act="tab" data-tab="${id}" aria-selected="${S.tab===id}">${ic(id)}<span class="tl">${t}</span>${c?`<span class="count" title="Da classificare">${c}</span>`:""}</button>`).join("")}</div>`:"";
+  const n=C?daClassificare(C.mov).length:0,pc=typeof dashOk==="function"&&dashOk();
+  // Telefono: barra in basso con 4 sezioni. PC: menu a tendina con anche Movimenti e, su schermo largo, la dashboard grande.
+  const barra=[["panoramica","Dashboard",n],["altro",nomeExtra()],["obiettivi","Obiettivi"],["impostazioni","Impostazioni"]];
+  const menu=(pc?[["dashboard","Dashboard"],["panoramica","Panoramica"]]:[["panoramica","Dashboard"]])
+    .concat([["movimenti","Movimenti",n],["altro",nomeExtra()],["obiettivi","Obiettivi"],["impostazioni","Impostazioni"]]);
+  if(S.tab==="dashboard"&&!pc||!menu.some(t=>t[0]===S.tab)&&!PADRE[S.tab])S.tab="panoramica";
+  const sel=PADRE[S.tab]&&!menu.some(t=>t[0]===S.tab)?PADRE[S.tab]:S.tab,selB=PADRE[S.tab]||S.tab;
+  const att=menu.find(t=>t[0]===sel)||menu[0],ic=id=>icona(id==="panoramica"&&!pc?"dashboard":id),icB=id=>icona(id==="panoramica"?"dashboard":id),num=c=>c?`<span class="count" title="Da classificare">${c}</span>`:"";
+  $("tabs").innerHTML=C?`<span class="solo-pc">${bottoneOcchio()}</span><div class="menu"><button class="menubtn" data-act="menu" aria-haspopup="menu" aria-expanded="${!!S.menu}">${ic(att[0])}<span>${att[1]}</span>${num(att[2])}<span class="caret" aria-hidden="true">▾</span></button>
+    ${S.menu?`<div class="menulist" role="menu">${menu.map(([id,t,c])=>`<button role="menuitem" class="menuitem" data-act="tab" data-tab="${id}" aria-current="${sel===id}">${ic(id)}<span>${t}</span>${num(c)}</button>`).join("")}</div>`:""}</div>
+    <div class="tabs" role="tablist">${barra.map(([id,t,c])=>`<button class="tab" role="tab" data-act="tab" data-tab="${id}" aria-selected="${selB===id}">${icB(id)}<span class="tl">${t}</span>${c?`<span class="count" title="Da classificare">${c}</span>`:""}</button>`).join("")}</div>`:"";
+}
+// Intestazione delle pagine interne: «‹ Impostazioni» e il titolo. Movimenti ha il tasto solo sul telefono (sul PC sta nel menu).
+function testaPagina(id){
+  const p=PADRE[id],nomeP=p==="panoramica"?"Dashboard":"Impostazioni";
+  return `<div class="pagina${id==="movimenti"?" solo-tel":""}"><button class="indietro" data-act="tab" data-tab="${p}"><span aria-hidden="true">‹</span> ${nomeP}</button><h1>${TITOLI[id]}</h1></div>`;
 }
 function renderMain(){
   const C=C0(),el=$("main");
   if(!C){el.innerHTML=`<div class="loading">${S.msg}</div>`;return;}
   if(S.tab==="panoramica")el.innerHTML=vPanoramica(C);
-  else if(S.tab==="movimenti"){el.innerHTML=vMovimenti(C);renderLista();}
-  else if(S.tab==="categorie")el.innerHTML=vCategorie(C);
+  else if(S.tab==="movimenti"){el.innerHTML=testaPagina("movimenti")+vMovimenti(C);renderLista();}
+  else if(S.tab==="categorie")el.innerHTML=testaPagina("categorie")+vCategorie(C);
   else if(S.tab==="obiettivi")el.innerHTML=vObiettivi(C);
   else if(S.tab==="altro")el.innerHTML=vAltro(C);
   else if(S.tab==="dashboard")el.innerHTML=vDashboard(C);
-  else el.innerHTML=vBanca(C);
-  el.insertAdjacentHTML("beforeend",`<p class="meta" style="text-align:center;margin-top:36px">Accesso come ${esc(user?.email||"")} · <button class="linkbtn" data-act="logout">Log out</button></p>`);
+  else if(S.tab==="impostazioni")el.innerHTML=vImpostazioni(C);
+  else el.innerHTML=testaPagina("banca")+vBanca(C);
   disegnaGrafici();tipTorta();if(S.tab==="dashboard")disegnaDashboard();
   document.body.classList.toggle("wide",S.tab==="dashboard");
   const ml=el.querySelector(".mesi"),on=ml&&ml.querySelector('[aria-pressed="true"]');
   if(on&&ml.scrollWidth>ml.clientWidth)ml.scrollLeft=on.offsetLeft-ml.offsetLeft-(ml.clientWidth-on.offsetWidth)/2;
 }
 function nessunDato(C){
-  return `<div class="card empty"><b>Nessun movimento.</b>Collega il conto ${esc(contoNome(S.conto))} a Banca Valsabbina: i movimenti arriveranno da soli.<br><br><button class="btn" data-act="tab" data-tab="banca">Collega la banca</button>${S.tab==="movimenti"?` <button class="btn ghost" data-act="contanti-nuovo">+ ${nomeExtra()}</button>`:""}</div>`;
+  return `<div class="card empty"><b>Nessun movimento</b>Collega il conto ${esc(contoNome(S.conto))} a Banca Valsabbina: i movimenti arriveranno da soli.<br><br><button class="btn" data-act="tab" data-tab="banca">Collega la banca</button>${S.tab==="movimenti"?` <button class="btn ghost" data-act="contanti-nuovo">+ ${nomeExtra()}</button>`:""}</div>`;
 }
 // Mese/Anno + una casella per ogni anno con movimenti e (in modalità Mese) per ogni mese dell'anno scelto.
 function barraPeriodo(conTutto){
@@ -197,7 +215,7 @@ function vPanoramica(C){
   if(S.per==="tutto")S.per="anno";
   const T=totPeriodo(),ms=visibili(),todo=daClassificare(ms).length;
   const quota=T.e>0?Math.round(T.r/T.e*100):null;
-  let h=cardSaldi(C)+barraPeriodo(false);
+  let h=cardSaldi(C)+cardUltimi(C)+barraPeriodo(false);
   if(todo)h+=`<div class="banner"><p><b>${todo} ${todo===1?"movimento":"movimenti"} da classificare</b> in questo periodo. Ogni correzione insegna all'app a riconoscerli da sola.</p><button class="btn small" data-act="vai-todo">Classifica ora</button></div>`;
   const PV="polizza-vita",pv=C.mov.some(m=>m._c.id===PV||radice(m._c.id)===PV);
   const pvSomma=ms=>-ms.filter(m=>m._c.id===PV||radice(m._c.id)===PV).reduce((s,m)=>s+m.importo,0);
@@ -207,13 +225,13 @@ function vPanoramica(C){
   for(const [id,a] of Object.entries(agg))if(a.v<-0.004)usc.push([id,-a.v]);
   usc.sort((a,b)=>b[1]-a[1]);
   h+=`<div class="kpis${pv?" k4":""}">
-    <div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${T.e>0.004?"+":""}${eur(T.e)}</div></div>
-    <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${T.u>0.004?"−":""}${eur(T.u)}</div></div>
+    <div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${segno("+",T.e)}${eur(T.e)}</div></div>
+    <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${segno("−",T.u)}${eur(T.u)}</div></div>
     <div class="kpi hero"><div class="k">Risparmio</div><div class="v num">${eurS(T.r)}</div><div class="d">${quota==null?"&nbsp;":quota+"% delle entrate"}</div></div>
     ${pv?`<div class="kpi"><div class="k">Polizza vita</div><div class="v num">${eur(pvSomma(ms))}</div><div class="d">${eur(pvSomma(C.mov))} dall'inizio</div></div>`:""}
   </div>`;
   h+=cardTorta(usc,T.u);
-  h+=`<div class="card" style="margin-bottom:14px"><div class="card-head"><h2 class="dotted">${S.per==="anno"?"Mesi del "+S.mese.slice(0,4):"Ultimi 12 mesi"}</h2><div class="legend"><span><i class="key in"></i>Entrate</span><span><i class="key out"></i>Uscite</span></div></div>
+  h+=`<div class="card" style="margin-bottom:14px"><div class="card-head"><h2>${S.per==="anno"?"Mesi del "+S.mese.slice(0,4):"Ultimi 12 mesi"}</h2><div class="legend"><span><i class="key in"></i>Entrate</span><span><i class="key out"></i>Uscite</span></div></div>
     <div class="chart" id="chart-mesi"></div>
     <details class="numbers"><summary>Vedi i numeri</summary>${tabellaMesi(C)}</details></div>`;
   return h;
@@ -234,10 +252,18 @@ function saldi(C){
 function cardSaldi(C){
   const x=saldi(C),nome=nomeExtra(),ca=contoAttivo(),carta=ca.carta_saldo_al!=null;
   const n=1+(S.conto==="comune"?0:1)+(carta?1:0);
-  return `<div class="card saldi"><div class="card-head"><h2 class="dotted">Numeri del conto</h2></div>
+  return `<div class="card saldi"><div class="card-head"><h2>Numeri del conto</h2>${bottoneOcchio()}</div>
   <div class="saldigrid${n===1?" uno":n===3?" tre":""}"><div class="saldo" title="${x.dallaBanca?"Saldo comunicato da Banca Valsabbina all'ultimo aggiornamento":"Somma dei movimenti della banca salvati"}"><div class="k">Saldo conto corrente</div><div class="big num">${eur(x.banca)}</div><div class="d">${x.al?"al "+giorno(x.al):"nessun movimento salvato"}</div></div>
   ${carta?`<div class="saldo" title="Saldo della carta prepagata comunicato da NEXI"><div class="k">Saldo prepagata</div><div class="big num">${eur(Number(ca.carta_saldo||0))}</div><div class="d">al ${giorno(ca.carta_saldo_al)}</div></div>`:""}
   ${S.conto==="comune"?"":`<div class="saldo"><div class="k">Saldo ${nome}</div><div class="big num">${eurS(x.altro)}</div></div>`}</div></div>`;
+}
+const bottoneOcchio=()=>`<button class="iconbtn occhio" data-act="occhio" aria-pressed="${S.nascosto}" aria-label="${S.nascosto?"Mostra gli importi":"Nascondi gli importi"}" title="${S.nascosto?"Mostra gli importi":"Nascondi gli importi"}">${icona(S.nascosto?"coperto":"privacy","oi")}</button>`;
+function occhio(v){S.nascosto=v;setPref("nascosto",v?"1":"0");nascondiTip();renderMain();if(sheet)renderSheet();}
+// Come nella home delle app delle banche: gli ultimi movimenti, poi «Tutti i movimenti».
+function cardUltimi(C){
+  const ms=C.mov.slice(0,5);if(!ms.length)return "";
+  return `<div class="card ultimi"><div class="card-head"><h2>Ultimi movimenti</h2><button class="linkbtn" data-act="tab" data-tab="movimenti">Tutti i movimenti</button></div>
+  <div class="mlist">${ms.map(m=>rigaMov(m,C)).join("")}</div></div>`;
 }
 /* ---------- ciambella delle uscite ---------- */
 // Colori fissi per categoria, in ordine di uscite in tutto lo storico del conto: le prime 8 hanno gli 8 colori verificati
@@ -359,7 +385,7 @@ function renderLista(){
   renderAttivi();
   const el=$("mres");if(!el)return;
   const ms=filtrati(),C=C0();
-  if(!ms.length){el.innerHTML=`<div class="card empty"><b>Nessun movimento.</b>Prova a cambiare periodo, filtri o ricerca.</div>`;return;}
+  if(!ms.length){el.innerHTML=`<div class="card empty"><b>Nessun movimento</b>Prova a cambiare periodo, filtri o ricerca.</div>`;return;}
   let h="";
   const vis=ms.slice(0,S.lim),gr={};
   for(const m of vis)(gr[m.data.slice(0,7)]??=[]).push(m);
@@ -451,9 +477,9 @@ function vAltro(C){
   const p=S.per==="tutto"?"":S.per==="anno"?S.mese.slice(0,4):S.mese,ms=tutti.filter(m=>m.data.startsWith(p));
   const ent=ms.filter(m=>m.importo>0).reduce((s,m)=>s+m.importo,0),usc=-ms.filter(m=>m.importo<0).reduce((s,m)=>s+m.importo,0);
   let h=barraPeriodo(true)+`<div class="toolbar"><p class="meta grow">Entrate e uscite fuori banca scritte a mano nel conto ${esc(contoNome(S.conto))}: ${tutti.length} in tutto.</p><button class="btn" data-act="contanti-nuovo">+ ${nome}</button></div>`;
-  if(!ms.length)return h+`<div class="card empty"><b>Nessun movimento.</b>${tutti.length?"In questo periodo non ce ne sono: prova «Tutto».":`Con «+ ${nome}» aggiungi entrate e uscite che non passano dalla banca.`}</div>`;
-  h+=`<div class="kpis"><div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${ent>0.004?"+":""}${eur(ent)}</div></div>
-    <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${usc>0.004?"−":""}${eur(usc)}</div></div>
+  if(!ms.length)return h+`<div class="card empty"><b>Nessun movimento</b>${tutti.length?"In questo periodo non ce ne sono: prova «Tutto».":`Con «+ ${nome}» aggiungi entrate e uscite che non passano dalla banca.`}</div>`;
+  h+=`<div class="kpis"><div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${segno("+",ent)}${eur(ent)}</div></div>
+    <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${segno("−",usc)}${eur(usc)}</div></div>
     <div class="kpi hero"><div class="k">Saldo ${nome}</div><div class="v num">${eurS(ent-usc)}</div><div class="d">${ms.length} ${ms.length===1?"movimento":"movimenti"}</div></div></div>`;
   const gr={};for(const m of ms)(gr[m.data.slice(0,7)]??=[]).push(m);
   for(const k of Object.keys(gr).sort().reverse()){
@@ -496,7 +522,7 @@ function vCategorie(C){
   h+=`<div class="grid g2"><div class="card">${gr.map(([t,f])=>{const cs=C.cats.filter(f);return cs.length?`<h3 style="margin:6px 0 4px">${t}</h3><div class="clist">${cs.map(c=>{const s=stat[c.id]||{n:0,t:0};
     return `<div class="crow${c.padre?" sub":""}"><div><span class="n">${esc(c.nome)}</span>${c.tipo!=="normale"?`<span class="tag">${tipoTag(c)}</span>`:""}<div class="s num">${s.n} mov. · ${eurS(s.t)}</div></div>
     <button class="btn ghost small" data-act="vai-cat-tutto" data-cat="${esc(c.id)}">Vedi</button><button class="btn ghost small" data-act="cat-mod" data-cat="${esc(c.id)}">Modifica</button></div>`;}).join("")}</div>`:"";}).join("")}</div>
-  <div class="card"><div class="card-head"><h2 class="dotted">Regole imparate</h2><p class="meta">${C.regole.length} regole</p></div>
+  <div class="card"><div class="card-head"><h2>Regole imparate</h2><p class="meta">${C.regole.length} regole</p></div>
   ${C.regole.length?`<div class="clist">${C.regole.slice().sort((a,b)=>a.testo.localeCompare(b.testo,"it")).map(r=>`<div class="crow"><div><span class="n">«${esc(r.testo)}»</span><div class="s">→ ${esc(nomeCat(r.categoria))} · ${usate[r.testo]} mov.</div></div><span></span><button class="btn ghost small" data-act="reg-mod" data-id="${r.id}">Modifica</button></div>`).join("")}</div>`
   :`<p class="meta">Ancora nessuna. Quando correggi la categoria di un movimento puoi dire all'app di ricordarla: nasce una regola, che vale anche per i prossimi movimenti.</p>`}
   <div class="sec"><h3>Come sceglie la categoria</h3><ol class="hint" style="padding-left:18px;margin:0;display:flex;flex-direction:column;gap:3px"><li>La scelta fatta a mano su quel movimento.</li><li>Le regole imparate (se più regole valgono, vince la più lunga).</li><li>Il codice causale della banca (commissioni, bollo, F24, prelievi…).</li><li>Un elenco di esercenti italiani (supermercati, utenze, carburante…).</li><li>Altrimenti «Da classificare» (uscite) o «Altre entrate».</li></ol></div></div></div>`;
@@ -594,9 +620,10 @@ function cardObiettivo(C,o){
   ${p.storia?`<div class="months" aria-label="Ultimi mesi">${p.storia.map(s=>`<span class="${s.ok?"hit":""}" title="${ymNome(s.k)}: ${s.ok?"raggiunto":"non raggiunto"}">${MESI3[+s.k.slice(5)-1]}${s.ok?" ✓":""}</span>`).join("")}</div>`:""}</div>`;
 }
 function vObiettivi(C){
+  if(!personale())return `<div class="card empty" style="margin-top:16px"><b>Obiettivi sui conti personali</b>Risparmio e investimenti si impostano sul conto di ciascuno: apri il tuo conto in alto per vederli.</div>`;
   const inv=C.cats.filter(c=>c.tipo==="investimento").map(c=>c.id),nInv=C.mov.filter(m=>inv.includes(m._c.id)).length;
   let h=`<div class="toolbar"><p class="meta grow">Gli obiettivi mensili si leggono sul mese scelto in Panoramica (${ymNome(S.mese)}).</p><button class="btn" data-act="obi-nuovo">Nuovo obiettivo</button></div>`;
-  if(!C.obi.length)h+=`<div class="card empty"><b>Nessun obiettivo.</b>Esempi: «Risparmiare 500 € al mese», «Fondo emergenza: 5.000 € entro dicembre 2027», «Investire 200 € al mese nel PAC».</div>`;
+  if(!C.obi.length)h+=`<div class="card empty"><b>Nessun obiettivo</b>Esempi: «Risparmiare 500 € al mese», «Fondo emergenza: 5.000 € entro dicembre 2027», «Investire 200 € al mese nel PAC».</div>`;
   else h+=`<div class="goals">${C.obi.map(o=>cardObiettivo(C,o)).join("")}</div>`;
   if(C.obi.some(o=>o.tipo==="investimento")&&!nInv)h+=`<p class="warnline" style="margin-top:14px">Nessun movimento è ancora nella categoria «Investimenti». Apri un bonifico verso il broker o il fondo e mettilo in quella categoria, con «ricorda» attivo: l'app lo riconoscerà anche nei prossimi mesi.</p>`;
   return h;
@@ -680,14 +707,47 @@ function bloccoBanca(fonte){
 }
 function cardBanca(){
   const L0=D.banca[S.conto]||{},vivo=Object.values(L0).some(c=>c.esito!=="scaduto"&&giorniA(c.scade)>0);
-  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2 class="dotted">Collegamento con la banca</h2>
+  // La prepagata (NEXI) per ora non si collega: il collegamento di Enable Banking con NEXI dà errore al login.
+  // Il blocco compare solo se una carta è già collegata.
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Conti collegati</h2>
     ${vivo?`<button class="btn small" data-act="banca-aggiorna" ${S.banca?"disabled":""}>${S.banca==="aggiorna"?"Aggiorno…":"Aggiorna ora"}</button>`:""}</div>
-    ${bloccoBanca("conto")}${bloccoBanca("carta")}
+    ${bloccoBanca("conto")}${L0.carta?bloccoBanca("carta"):""}
     <p class="hint" style="margin-top:14px">Sola lettura: l'app vede movimenti e saldo, non può disporre pagamenti. Il consenso si dà sul sito della banca, vale 6 mesi e passa da Enable Banking, un intermediario autorizzato.</p></div>`;
+}
+/* ---------- impostazioni ---------- */
+// Elenco a righe come nelle app delle banche: conto aperto (banca, categorie), privacy, account, documenti.
+function riga({act,tab,href,ic,t,s,v,cl}){
+  const dentro=`<span class="ric">${icona(ic,"oi")}</span><span class="rt"><b>${t}</b>${s?`<small>${s}</small>`:""}</span>${v!=null?`<span class="rv">${v}</span>`:""}`;
+  if(href)return `<a class="riga${cl?" "+cl:""}" href="${href}" target="_blank" rel="noopener">${dentro}<span class="rc" aria-hidden="true">›</span></a>`;
+  if(!act&&!tab)return `<div class="riga${cl?" "+cl:""}">${dentro}</div>`;
+  return `<button class="riga${cl?" "+cl:""}" data-act="${act||"tab"}"${tab?` data-tab="${tab}"`:""}>${dentro}${act&&act!=="tab"?"":`<span class="rc" aria-hidden="true">›</span>`}</button>`;
+}
+function statoBanca(){
+  const c=(D.banca[S.conto]||{}).conto;
+  if(!c)return {s:"Da collegare",cl:""};
+  if(c.esito==="scaduto"||giorniA(c.scade)<=0)return {s:"Consenso scaduto: da rinnovare",cl:" attenzione"};
+  if(giorniA(c.scade)<=21)return {s:"Il consenso scade tra "+giorniA(c.scade)+" giorni",cl:" attenzione"};
+  return {s:"Banca Valsabbina · aggiornato "+(c.ultimo_sync?quando(c.ultimo_sync):"mai"),cl:""};
+}
+function vImpostazioni(C){
+  const b=statoBanca(),nome=esc(contoNome(S.conto));
+  const sw=`<span class="switch" aria-hidden="true"><i></i></span>`;
+  return `<div class="pagina"><h1>Impostazioni</h1></div>
+  <p class="gruppo">Conto ${nome}</p><div class="card lista">
+    ${riga({tab:"banca",ic:"banca",t:"Collegamento banca",s:b.s,cl:b.cl.trim()})}
+    ${riga({tab:"categorie",ic:"categorie",t:"Categorie e regole",s:`${C.cats.length} categorie · ${C.regole.length} ${C.regole.length===1?"regola":"regole"} imparate`})}</div>
+  <p class="gruppo">Privacy</p><div class="card lista">
+    <button class="riga" data-act="occhio-imp" role="switch" aria-checked="${S.nascosto}"><span class="ric">${icona(S.nascosto?"coperto":"privacy","oi")}</span><span class="rt"><b>Nascondi gli importi</b><small>Saldi e cifre coperti, su questo dispositivo. Si cambia anche con l'occhio sul saldo.</small></span>${sw}</button></div>
+  <p class="gruppo">Account</p><div class="card lista">
+    ${riga({ic:"account",t:"Accesso",s:esc(user?.email||"")})}
+    ${riga({act:"logout",ic:"esci",t:"Log out",cl:"rossa"})}</div>
+  <p class="gruppo">Informazioni</p><div class="card lista">
+    ${riga({href:"privacy.html",ic:"documento",t:"Informativa privacy"})}
+    ${riga({href:"termini.html",ic:"documento",t:"Termini d'uso"})}</div>`;
 }
 function vBanca(C){
   let h=cardBanca();
-  h+=`<div class="card" style="margin-top:14px"><div class="card-head"><h2 class="dotted">Movimenti arrivati</h2>${C.primo?`<p class="meta">movimenti dal ${giorno(C.mov[C.mov.length-1].data)} al ${giorno(C.mov[0].data)}</p>`:""}</div>`;
+  h+=`<div class="card" style="margin-top:14px"><div class="card-head"><h2>Movimenti arrivati</h2>${C.primo?`<p class="meta">movimenti dal ${giorno(C.mov[C.mov.length-1].data)} al ${giorno(C.mov[0].data)}</p>`:""}</div>`;
   if(!C.imps.length)h+=`<p class="meta">Ancora nessuno.</p>`;
   else h+=C.imps.map(i=>{
     return `<div class="hist"><div><b>${esc(i.nome_file||"XLS")}</b><div class="s">${i.dal?giorno(i.dal)+" – "+giorno(i.al):""} · ${i.righe_importate} ${i.righe_importate===1?"nuovo":"nuovi"}${i.righe_duplicate?` · ${i.righe_duplicate} già presenti`:""} · ${new Date(i.caricato).toLocaleDateString("it-IT")}</div></div>
@@ -769,6 +829,7 @@ document.addEventListener("click",e=>{
   if(S.menu&&!e.target.closest(".menu")){S.menu=false;renderTabs();} // clic fuori: il menu si chiude
   const b=e.target.closest("[data-act]");if(!b)return;const a=b.dataset.act;
   if(a==="logout"){esci();return;}
+  if(a==="occhio"||a==="occhio-imp"){occhio(!S.nascosto);return;}
   if(!C0()&&a!=="conto")return;
   if(a==="menu"){S.menu=!S.menu;renderTabs();return;}
   if(a==="conto"){if(S.conto!==b.dataset.id)apriConto(b.dataset.id);}
@@ -843,7 +904,7 @@ function showLogin(msg){
 async function apriConto(id){
   S.conto=id;setPref("conto",id);S.filtri=filtriVuoti();S.verso="tutti";S.q="";chiudi();
   if(!D.c[id]){S.msg="Carico i movimenti…";renderAll();
-    try{await caricaConto(id);}catch(e){S.msg=nonPronto(e)?"<b>Database da preparare.</b><br>Esegui <code>supabase/schema.sql</code> nel SQL Editor di Supabase.":"Non riesco a caricare il conto: controlla la connessione.";console.error(e);renderAll();return;}
+    try{await caricaConto(id);}catch(e){S.msg=nonPronto(e)?"<b>Database da preparare</b><br>Esegui <code>supabase/schema.sql</code> nel SQL Editor di Supabase.":"Non riesco a caricare il conto: controlla la connessione.";console.error(e);renderAll();return;}
     if(S.conto!==id)return;
     S.mese=D.c[id].ultimo||ymOggi();
   }
@@ -853,10 +914,10 @@ async function start(){
   document.body.className="signed-in";$("login").hidden=true;$("app").hidden=false;
   S.msg="Carico i conti…";D.conti=[];D.c={};S.conto=null;renderAll();
   const {data:me,error:e1}=await sb.from("membri").select("persona").eq("user_id",user.id).maybeSingle();
-  if(e1||!me){S.msg=e1?"Non riesco a collegarmi: controlla la connessione.":`<b>Account non abilitato.</b><br>Hai fatto l'accesso come ${esc(user.email)}, ma questo account non è nella tabella «membri».<br><br><button class="btn ghost" data-act="logout">Log out</button>`;renderMain();return;}
+  if(e1||!me){S.msg=e1?"Non riesco a collegarmi: controlla la connessione.":`<b>Account non abilitato</b><br>Hai fatto l'accesso come ${esc(user.email)}, ma questo account non è nella tabella «membri».<br><br><button class="btn ghost" data-act="logout">Log out</button>`;renderMain();return;}
   persona=me.persona;
   const {data:conti,error}=await sb.from("conti").select("*");
-  if(error||!conti?.length){S.msg=nonPronto(error)||!conti?.length?"<b>Database da preparare.</b><br>Esegui <code>supabase/schema.sql</code> nel SQL Editor di Supabase.":"Non riesco a caricare i conti.";renderMain();return;}
+  if(error||!conti?.length){S.msg=nonPronto(error)||!conti?.length?"<b>Database da preparare</b><br>Esegui <code>supabase/schema.sql</code> nel SQL Editor di Supabase.":"Non riesco a caricare i conti.";renderMain();return;}
   const ord={[persona]:0,comune:1};
   D.conti=conti.sort((a,b)=>(ord[a.id]??2)-(ord[b.id]??2));
   if(typeof dashOk==="function"&&dashOk())S.tab="dashboard";

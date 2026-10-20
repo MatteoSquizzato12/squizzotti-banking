@@ -31,8 +31,8 @@ function vDashboard(C){
     <p class="meta grow" style="text-align:right">${ymNome(mesi[0])} – ${ymNome(mesi[mesi.length-1])}</p></div>`;
   const quota=T.e>0?Math.round(T.r/T.e*100):null;
   h+=`<div class="dkpis">
-    <div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${T.e>0.004?"+":""}${eur(T.e)}</div></div>
-    <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${T.u>0.004?"−":""}${eur(T.u)}</div></div>
+    <div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${segno("+",T.e)}${eur(T.e)}</div></div>
+    <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${segno("−",T.u)}${eur(T.u)}</div></div>
     <div class="kpi hero"><div class="k">Risparmio</div><div class="v num">${eurS(T.r)}</div><div class="d">${quota==null?"&nbsp;":quota+"% delle entrate"}</div></div>
     ${pv>0.004?`<div class="kpi"><div class="k">Polizza vita</div><div class="v num">${eur(pv)}</div></div>`:""}
     <div class="kpi"><div class="k">Saldo conto corrente</div><div class="v num">${eur(x.banca)}</div><div class="d">${x.al?"al "+giorno(x.al):""}</div></div>
