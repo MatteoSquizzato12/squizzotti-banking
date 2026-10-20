@@ -257,7 +257,7 @@ function vPanoramica(C){
   if(S.per==="tutto")S.per="anno";
   const T=totPeriodo(),ms=visibili(),todo=daClassificare(ms).length;
   const quota=T.e>0?Math.round(T.r/T.e*100):null;
-  let h=cardConti("banca")+cardUltimi(C)+barraPeriodo(false);
+  let h=cardConti("banca")+promemoriaPrepagata(C)+cardUltimi(C)+barraPeriodo(false);
   if(todo)h+=`<div class="banner"><p><b>${todo} ${todo===1?"movimento":"movimenti"} da classificare</b> in questo periodo. Ogni correzione insegna all'app a riconoscerli da sola.</p><button class="btn small" data-act="vai-todo">Classifica ora</button></div>`;
   const PV="polizza-vita",pv=C.mov.some(m=>m._c.id===PV||radice(m._c.id)===PV);
   const pvSomma=ms=>-ms.filter(m=>m._c.id===PV||radice(m._c.id)===PV).reduce((s,m)=>s+m.importo,0);
@@ -304,7 +304,8 @@ function cartaConto(c,modo){
   let k,v,d;
   if(modo==="altro"){k="Saldo "+nomeExtraDi(c.id);v=x?eurS(x.altro):"…";d=x?`${x.nAltro} ${x.nAltro===1?"movimento":"movimenti"} fuori banca`:"";}
   else{k="Saldo contabile";v=x?eur(x.banca):"…";d=x?(x.al?"al "+giorno(x.al):"nessun movimento salvato"):"";
-    if(c.carta_saldo_al!=null)d+=` · prepagata ${eur(Number(c.carta_saldo||0))}`;}
+    const carta=C?C.mov.filter(m=>m.causale===CARTA):[]; // saldo della prepagata = somma dei suoi movimenti contabilizzati
+    if(c.carta_saldo_al!=null)d+=` · prepagata ${eur(Number(c.carta_saldo||0))}`;else if(carta.length)d+=` · prepagata ${eur(carta.reduce((t,m)=>t+m.importo,0))}`;}
   return `<div class="cartaconto${sel?" sel":""}" role="button" tabindex="0" data-act="conto" data-id="${c.id}" aria-pressed="${sel}" aria-label="${esc(c.nome)}">
     <div class="cc-top"><div><small>${modo==="altro"?nomeExtraDi(c.id)+" · fuori banca":tipo}</small><b>${esc(c.nome)}</b></div>${sel?bottoneOcchio():""}</div>
     <div class="cc-num">${modo==="altro"?"Entrate e uscite scritte a mano":iban?"Conto n. **** **** "+esc(iban):"Banca Valsabbina · conto da collegare"}</div>
@@ -769,10 +770,10 @@ function bloccoBanca(fonte){
 function cardBanca(){
   const L0=D.banca[S.conto]||{},vivo=Object.values(L0).some(c=>c.esito!=="scaduto"&&giorniA(c.scade)>0);
   // La prepagata (NEXI) per ora non si collega: il collegamento di Enable Banking con NEXI dà errore al login.
-  // Il blocco compare solo se una carta è già collegata.
+  // Al suo posto il caricamento dell'Excel di Nexi; il blocco del collegamento compare solo se una carta è già collegata.
   return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Conti collegati</h2>
     ${vivo?`<button class="btn small" data-act="banca-aggiorna" ${S.banca?"disabled":""}>${S.banca==="aggiorna"?"Aggiorno…":"Aggiorna ora"}</button>`:""}</div>
-    ${bloccoBanca("conto")}${L0.carta?bloccoBanca("carta"):""}
+    ${bloccoBanca("conto")}${L0.carta?bloccoBanca("carta"):bloccoPrepagataXLS()}
     <p class="hint" style="margin-top:14px">Sola lettura: l'app vede movimenti e saldo, non può disporre pagamenti. Il consenso si dà sul sito della banca, vale 6 mesi e passa da Enable Banking, un intermediario autorizzato.</p></div>`;
 }
 /* ---------- impostazioni ---------- */
@@ -811,10 +812,84 @@ function vBanca(C){
   h+=`<div class="card" style="margin-top:14px"><div class="card-head"><h2>Movimenti arrivati</h2>${C.primo?`<p class="meta">movimenti dal ${giorno(C.mov[C.mov.length-1].data)} al ${giorno(C.mov[0].data)}</p>`:""}</div>`;
   if(!C.imps.length)h+=`<p class="meta">Ancora nessuno.</p>`;
   else h+=C.imps.map(i=>{
+    // Solo i file della prepagata si possono annullare: si ricaricano quando si vuole. Quelli della banca no
+    // (dopo la prima ora la banca ridà solo gli ultimi 90 giorni).
+    const k="imp"+i.id,conf=S.conferma[k]&&Date.now()-S.conferma[k]<4000,annullabile=PREPAGATA_XLS.test(i.nome_file||"");
     return `<div class="hist"><div><b>${esc(i.nome_file||"XLS")}</b><div class="s">${i.dal?giorno(i.dal)+" – "+giorno(i.al):""} · ${i.righe_importate} ${i.righe_importate===1?"nuovo":"nuovi"}${i.righe_duplicate?` · ${i.righe_duplicate} già presenti`:""} · ${new Date(i.caricato).toLocaleDateString("it-IT")}</div></div>
-    </div>`;}).join("");
+    ${annullabile?`<button class="btn ${conf?"danger":"ghost"} small" data-act="imp-annulla" data-id="${i.id}">${conf?"Tocca di nuovo per cancellarli":"Annulla"}</button>`:""}</div>`;}).join("");
   h+=`</div>`;
   return h;
+}
+/* ---------- carta prepagata: Excel di Nexi ---------- */
+// Il collegamento diretto con NEXI per ora non funziona: ogni mese si carica l'Excel scaricato da Nexi.
+// I movimenti hanno causale CARTA (etichetta «prepagata»); le ricariche diventano un giroconto.
+const PREPAGATA_XLS=/^Prepagata\b.*\(XLS\)/;
+let xlsxP=null;
+function caricaXLSX(){
+  return xlsxP||=new Promise((ok,ko)=>{const s=document.createElement("script");s.src="vendor/xlsx.core.min.js";
+    s.onload=()=>ok(window.XLSX);s.onerror=()=>{xlsxP=null;s.remove();ko(new Error("Non riesco a caricare il lettore Excel: controlla la connessione."));};document.head.appendChild(s);});
+}
+const inputPrepagata=(testo,cl="btn")=>`<label class="${cl}">${testo}<input type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" data-file-prepagata hidden></label>`;
+function bloccoPrepagataXLS(){
+  const C=C0(),ms=C.mov.filter(m=>m.causale===CARTA),ult=C.imps.find(i=>PREPAGATA_XLS.test(i.nome_file||""));
+  return `<div class="sec"><h3>Carta prepagata <span class="meta">· Excel di Nexi</span></h3>
+    <p>Ogni mese scarica da Nexi (app Nexi Pay o nexi.it → movimenti della carta → esporta in Excel) e carica il file qui. Le spese entrano in questo conto con l'etichetta «prepagata»; i movimenti già caricati vengono saltati.</p>
+    ${ms.length?`<div class="facts" style="margin-top:8px"><div><span>Movimenti della carta</span> ${ms.length}, fino al ${giorno(ms[0].data)}</div>${ult?`<div><span>Ultimo file</span> ${new Date(ult.caricato).toLocaleDateString("it-IT")}</div>`:""}</div>`:""}
+    <div style="margin-top:12px">${inputPrepagata("Carica l'Excel della prepagata")}</div></div>`;
+}
+async function leggiPrepagataFile(file){
+  if(!file)return;
+  if(file.size>15e6){toast("File troppo grande.");return;}
+  toast("Leggo "+file.name+"…");
+  try{
+    const [XLSX,buf]=await Promise.all([caricaXLSX(),file.arrayBuffer()]);
+    const wb=XLSX.read(buf,{type:"array"});
+    const {carta,movimenti,esclusi}=L.leggiPrepagata(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null}));
+    if(!movimenti.length&&!esclusi.length)throw new Error("Nel file non ci sono movimenti.");
+    const date=movimenti.map(m=>m.data).sort();
+    // Doppioni: stessa chiave = stesso movimento, contando quante volte compare (come per la banca).
+    const salvati=date.length?await tutte(()=>sb.from("movimenti").select("chiave").eq("conto",S.conto).eq("causale",CARTA).gte("data",date[0]).lte("data",date[date.length-1])):[];
+    const quanti=new Map();for(const r of salvati)quanti.set(r.chiave,(quanti.get(r.chiave)||0)+1);
+    const nuovi=[];for(const m of movimenti){const n=quanti.get(m.chiave)||0;if(n)quanti.set(m.chiave,n-1);else nuovi.push(m);}
+    const C=C0(),ctx={conto:S.conto,cats:C.cats,regole:C.regole};
+    nuovi.forEach(m=>{m._c=L.classifica(m,ctx);m._e=L.esercente(m);});
+    // La carta è di questo conto se le sue ricariche partono da qui (la descrizione della ricarica ha il numero della carta).
+    const mia=!carta||C.mov.some(m=>/RICARICA CARTA/i.test(m.descrizione)&&String(m.descrizione).includes(carta));
+    sheet={tipo:"prepagata",carta,nuovi,dup:movimenti.length-nuovi.length,esclusi:esclusi.length,dal:date[0],al:date[date.length-1],mia};renderSheet();
+  }catch(e){toast(e.message||"Non riesco a leggere il file.");}
+}
+function sheetPrepagata(){
+  const P=sheet,n=P.nuovi.length;
+  return `<div class="sh-head"><div><div class="eyebrow">Prepagata${P.carta?" …"+esc(P.carta):""} · conto ${esc(contoNome(S.conto))}</div><h2>Movimenti da caricare</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
+  ${P.mia?"":`<p class="warnline" style="margin-bottom:10px">Questa carta non risulta ricaricata dal conto ${esc(contoNome(S.conto))}. Sei sicuro che sia il conto giusto?</p>`}
+  <div class="pstat"><div><b class="num">${n}</b><span>nuovi</span></div><div><b class="num">${P.dup}</b><span>già caricati</span></div><div><b class="num">${P.esclusi}</b><span>non contabilizzati</span></div></div>
+  ${P.dal?`<p class="hint">Dal ${giorno(P.dal)} al ${giorno(P.al)}.${P.esclusi?" I movimenti non ancora contabilizzati si saltano: arriveranno con il file del mese prossimo.":""}</p>`:""}
+  ${n?`<div class="plist">${P.nuovi.map(m=>`<div class="prow"><span class="meta num">${giorno(m.data).replace(/ \d{4}$/,"")}</span><span class="w"><b>${esc(m._e)}</b> <span class="pill${m._c.id==="da-classificare"?" todo":""}">${esc(nomeCat(m._c.id))}</span></span><span class="num${m.importo>0?" pos":""}">${eurS(m.importo)}</span></div>`).join("")}</div>`
+    :`<p class="okline">Tutti i movimenti di questo file sono già stati caricati.</p>`}
+  <div class="sh-foot"><span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="prepagata-ok" ${n&&!P.occ?"":"disabled"}>${P.occ?"Carico…":`Carica ${n} ${n===1?"movimento":"movimenti"}`}</button></div>`;
+}
+async function importaPrepagata(){
+  const P=sheet;P.occ=true;renderSheet();
+  const righe=P.nuovi.map(({data,valuta,importo,causale,descrizione,chiave})=>({data,valuta,importo,causale,descrizione,chiave}));
+  const {error}=await sb.rpc("importa_movimenti",{p_conto:S.conto,p_nome_file:"Prepagata"+(P.carta?" …"+P.carta:"")+" (XLS)",p_righe_file:righe.length+P.dup,p_righe_duplicate:P.dup,p_movimenti:righe});
+  if(error){P.occ=false;renderSheet();return errore(error);}
+  // Con le spese della carta nel conto, le ricariche dal conto sono un giroconto (altrimenti si conterebbero due volte).
+  const cat=C0().byId.prepagata;
+  if(cat&&cat.tipo!=="trasferimento")await sb.from("categorie").update({tipo:"trasferimento"}).eq("conto",S.conto).eq("id","prepagata");
+  chiudi();await caricaConto(S.conto);renderAll();toast(`Caricati ${righe.length} movimenti della prepagata.`);
+}
+async function annullaImport(id){
+  const k="imp"+id;
+  if(!(S.conferma[k]&&Date.now()-S.conferma[k]<4000)){S.conferma[k]=Date.now();renderMain();setTimeout(()=>{if(S.tab==="banca")renderMain();},4100);return;}
+  const {error}=await sb.from("importazioni").delete().eq("id",id);if(error)return errore(error);
+  await caricaConto(S.conto);renderAll();toast("File annullato: i suoi movimenti sono stati cancellati.");
+}
+// Promemoria in Dashboard: dal 1° del mese, finché non si carica l'Excel della prepagata (per i conti che la usano).
+function promemoriaPrepagata(C){
+  if(!C.mov.some(m=>m.causale===CARTA))return "";
+  const ini=ymOggi()+"-01";
+  if(C.imps.some(i=>PREPAGATA_XLS.test(i.nome_file||"")&&new Date(i.caricato).toISOString().slice(0,10)>=ini))return "";
+  return `<div class="banner"><p><b>Carica la prepagata di ${ymNome(ymAdd(ymOggi(),-1))}</b> Scarica da Nexi l'Excel dei movimenti della carta e caricalo: così le spese del mese sono complete.</p>${inputPrepagata("Carica ora","btn small")}</div>`;
 }
 async function bancaCollega(fonte){
   S.banca="collega-"+fonte;renderMain();
@@ -874,7 +949,7 @@ async function abbina(){
 /* ===================== pannello, messaggi ===================== */
 function renderSheet(){
   if(!sheet){$("overlay").hidden=true;return;}
-  const html=sheet.tipo==="mov"?sheetMov():sheet.tipo==="contanti"?sheetContanti():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheet.tipo==="abbina"?sheetAbbina():sheet.tipo==="periodo"?sheetPeriodo():sheetObi();
+  const html=sheet.tipo==="mov"?sheetMov():sheet.tipo==="contanti"?sheetContanti():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheet.tipo==="abbina"?sheetAbbina():sheet.tipo==="periodo"?sheetPeriodo():sheet.tipo==="prepagata"?sheetPrepagata():sheetObi();
   if(!sheet)return;
   const el=$("sheet"),top=el.scrollTop;el.innerHTML=html;$("overlay").hidden=false;el.scrollTop=top;
   document.body.style.overflow="hidden";
@@ -942,6 +1017,8 @@ document.addEventListener("click",e=>{
   else if(a==="banca-scollega")bancaScollega(b.dataset.fonte||"conto");
   else if(a==="abbina-scegli"){const i=+b.dataset.i,c=b.dataset.conto;sheet.scelte=sheet.scelte.map((x,j)=>j===i?c:c&&x===c?"":x);renderSheet();} // un conto dell'app riceve un solo conto della banca
   else if(a==="abbina-ok")abbina();
+  else if(a==="prepagata-ok")importaPrepagata();
+  else if(a==="imp-annulla")annullaImport(+b.dataset.id);
 });
 document.addEventListener("input",e=>{
   const t=e.target;
@@ -956,6 +1033,7 @@ document.addEventListener("input",e=>{
 document.addEventListener("change",e=>{
   const t=e.target;
   if(t.dataset.sheet==="regola"){sheet.regola=t.checked;renderSheet();}
+  else if(t.dataset.filePrepagata!=null){leggiPrepagataFile(t.files[0]);t.value="";}
 });
 document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList&&e.target.classList.contains("cartaconto")){e.preventDefault();e.target.click();return;}
   if(e.key==="Escape"){if(sheet)chiudi();else if(S.menu){S.menu=false;renderTabs();}}});

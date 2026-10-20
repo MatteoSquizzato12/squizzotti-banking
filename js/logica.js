@@ -14,6 +14,38 @@ function numero(v){
 }
 const pulisci=s=>String(s==null?"":s).replace(/\s+/g," ").trim();
 
+/* ---------- carta prepagata: Excel di Nexi ---------- */
+// Foglio «Movimenti conto»: una riga «Movimenti Carta **** **** **** 8644», poi l'intestazione
+// Mese | Data | Riferimento | Categorie | Descrizione | Stato | Importo originale in Divisa | Divisa | Importo (€) | …
+// Le righe «Non Contabilizzato» si saltano: tornano nel file del mese dopo, con il loro riferimento.
+// Le ricariche («RICARICA DA HOMEBANKING») non hanno riferimento: la chiave le distingue per data e importo.
+function dataNexi(v){
+  if(typeof v==="number")return new Date(Math.round((v-25569)*864e5)).toISOString().slice(0,10); // data Excel
+  const m=String(v==null?"":v).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return m?m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0"):null;
+}
+function leggiPrepagata(righe){
+  let carta=null,h=-1,col=null;
+  for(let i=0;i<Math.min(righe.length,40);i++){
+    const r=(righe[i]||[]).map(c=>pulisci(c)),trova=re=>r.findIndex(x=>re.test(x));
+    const m=r.join(" ").match(/Carta[\s*]+(\d{4})\b/i);if(m&&!carta)carta=m[1];
+    const c={data:trova(/^data$/i),descr:trova(/^descrizione$/i),imp:trova(/^importo\s*\(€\)$/i),rif:trova(/^riferimento$/i),stato:trova(/^stato$/i)};
+    if(c.data>=0&&c.descr>=0&&c.imp>=0){h=i;col=c;break;}
+  }
+  if(h<0)throw new Error("Non trovo le colonne dei movimenti (Data, Descrizione, Importo). È l'Excel della prepagata scaricato da Nexi?");
+  const movimenti=[],esclusi=[];
+  for(const r of righe.slice(h+1)){
+    if(!r||r.every(c=>c==null||c===""))continue;
+    const data=dataNexi(r[col.data]),importo=numero(r[col.imp]),descrizione=pulisci(r[col.descr]);
+    if(!data||importo==null||!importo||!descrizione)continue;
+    const m={data,valuta:data,importo:Math.round(importo*100)/100,causale:"CARTA",descrizione};
+    if(col.stato>=0&&/non\s+contabilizzat/i.test(pulisci(r[col.stato]))){esclusi.push(m);continue;}
+    m.chiave=[data,"CARTA",m.importo.toFixed(2),descrizione.toUpperCase(),col.rif>=0?pulisci(r[col.rif]):""].join("|");
+    movimenti.push(m);
+  }
+  return {carta,movimenti,esclusi};
+}
+
 /* ---------- duplicati ---------- */
 // Stesso giorno + stessa causale + stesso importo + stessa descrizione = stesso movimento.
 // La funzione "banca" calcola la stessa chiave: i movimenti già importati dagli XLS sono riconosciuti.
@@ -142,6 +174,6 @@ function classifica(m,ctx){
   return {id:ok("da-classificare")||cats.find(x=>x.verso==="uscita")?.id||null,come:"predefinita"};
 }
 
-const api={numero,chiave,esercente,testoRegola,categoriePredefinite,MIGRAZIONE_V2,classifica,norm};
+const api={numero,chiave,leggiPrepagata,esercente,testoRegola,categoriePredefinite,MIGRAZIONE_V2,classifica,norm};
 if(typeof module!=="undefined"&&module.exports)module.exports=api; else root.Logica=api;
 })(typeof window!=="undefined"?window:globalThis);
