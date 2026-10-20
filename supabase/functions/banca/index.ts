@@ -97,15 +97,16 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 type Collegamento = { conto: string; sessione: string; account_uid: string; scade: string };
 // Scarica i movimenti nuovi di un conto, li salva senza doppioni e allinea il saldo a quello della banca.
-async function sincronizza(c: Collegamento, chi: string | null, ip?: string) {
+// completo = subito dopo il consenso: tutto lo storico che la banca concede (lo dà solo nella prima ora).
+async function sincronizza(c: Collegamento, chi: string | null, ip?: string, completo = false) {
   try {
-    // Si riparte da 10 giorni prima dell'ultimo movimento salvato (la banca a volte contabilizza in ritardo).
-    // Dopo la prima ora dal consenso la banca dà solo gli ultimi 90 giorni. Conto vuoto: tutto lo storico disponibile.
+    // Altrimenti si riparte da 10 giorni prima dell'ultimo movimento salvato (la banca a volte contabilizza in
+    // ritardo), senza andare oltre gli ultimi 90 giorni concessi dopo la prima ora. Conto vuoto: tutto lo storico.
     const { data: ult, error: e1 } = await db.from("movimenti").select("data").eq("conto", c.conto)
       .not("causale", "in", `(${MANUALI.join(",")})`).order("data", { ascending: false }).limit(1);
     if (e1) throw e1;
     let dal: string | null = null;
-    if (ult.length) {
+    if (ult.length && !completo) {
       const d = new Date(ult[0].data + "T00:00:00Z").getTime() - 10 * GIORNO;
       dal = iso(new Date(Math.max(d, Date.now() - 89 * GIORNO)));
     }
@@ -274,7 +275,7 @@ Deno.serve(async (req) => {
       }
       await db.from("banca_attese").delete().eq("state", a.state);
       const esiti = [];
-      for (const r of righe) esiti.push(await sincronizza(r, user.id, ip));
+      for (const r of righe) esiti.push(await sincronizza(r, user.id, ip, true));
       return risposta({ esiti });
     }
 
