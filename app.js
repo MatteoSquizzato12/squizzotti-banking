@@ -17,6 +17,8 @@ const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;"
 const EUR=new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"});
 // Stili in prova («Lo stile di casa Squizzotti», PDF per Anna): si sceglie in Impostazioni, vale su questo dispositivo.
 const STILI={
+  private:{nome:"Private (proposta)",desc:"Blu notte e neutri, stile private banking",col:["#14305A","#F5F6F8"],
+    font:"family=Inter:opsz,wght@14..32,400..700&family=Inter+Tight:wght@500..700"},
   allos:{nome:"Allos",desc:"Giallo e antracite, come lo studio",col:["#FAB80C","#1E2021"]},
   oliva:{nome:"Oliva e Ambra",desc:"Verde oliva profondo e ambra dorata",col:["#3B4A2A","#D69A35"],
     font:"family=Bodoni+Moda:opsz,wght@6..96,500..700&family=Figtree:wght@400;500;600;700"},
@@ -500,10 +502,16 @@ function renderLista(){
   if(ms.length>S.lim)h+=`<div class="more"><button class="btn ghost" data-act="altri">Mostra altri ${Math.min(150,ms.length-S.lim)}</button></div>`;
   el.innerHTML=h;
 }
+// Nomi degli esercenti: la banca li scrive in maiuscolo; nello stile «Private» si leggono in minuscolo con le iniziali.
+const PICCOLE=new Set(["di","da","del","della","dei","e","ed","il","la","le","lo","in","a","al","per","con","su"]);
+const nomeEsercente=s=>document.documentElement.dataset.stile!=="private"||/[a-z]/.test(s)?s:
+  s.toLowerCase().replace(/[a-zà-ù0-9]+/g,(w,i)=>/\d/.test(w)?w.toUpperCase():i&&PICCOLE.has(w)?w:w.charAt(0).toUpperCase()+w.slice(1))
+    .replace(/\b(Spa|Srl|Srls|Snc|Sas)\b/g,x=>x.toUpperCase()); // codici con cifre e forme societarie restano maiuscoli
 function rigaMov(m,C){
-  const [,mm,dd]=m.data.split("-"),c=m._c,todo=c.id==="da-classificare";
-  return `<button class="mov" data-act="mov" data-id="${m.id}"><span class="dt"><b>${+dd}</b>${MESI3[+mm-1]}</span>
-    <span style="min-width:0"><span class="who" style="display:block">${esc(m._e)}</span><span class="sub">${m.causale===CONTANTI?`<span class="pill cash">${nomeExtra().toLowerCase()}</span>`:m.causale===RETTIFICA?`<span class="pill">rettifica</span>`:m.causale===CARTA?`<span class="pill cash">prepagata</span>`:""}<span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
+  const [,mm,dd]=m.data.split("-"),c=m._c,todo=c.id==="da-classificare",nome=nomeEsercente(m._e);
+  // .mav (iniziale) e .mdata (data nella riga sotto) compaiono solo nello stile «Private»
+  return `<button class="mov" data-act="mov" data-id="${m.id}"><span class="dt"><b>${+dd}</b>${MESI3[+mm-1]}</span><span class="mav${m.importo>0?" pos":""}" aria-hidden="true">${esc((nome.match(/[A-Za-zÀ-ÿ0-9]/)||["•"])[0].toUpperCase())}</span>
+    <span style="min-width:0"><span class="who" style="display:block">${esc(nome)}</span><span class="sub"><span class="mdata">${+dd} ${MESI3[+mm-1]}</span>${m.causale===CONTANTI?`<span class="pill cash">${nomeExtra().toLowerCase()}</span>`:m.causale===RETTIFICA?`<span class="pill">rettifica</span>`:m.causale===CARTA?`<span class="pill cash">prepagata</span>`:""}<span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
     <span class="amt num${m.importo>0?" pos":""}">${eurS(m.importo)}</span></button>`;
 }
 function chipsCategorie(C,sel){
