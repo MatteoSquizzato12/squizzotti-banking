@@ -121,16 +121,29 @@ async function sincronizza(c: Collegamento, chi: string | null, ip?: string, com
       const d = new Date(ult[0].data + "T00:00:00Z").getTime() - 10 * GIORNO;
       dal = iso(new Date(Math.max(d, Date.now() - 89 * GIORNO)));
     }
+    // Un periodo di 90 giorni alla volta: in una richiesta sola la banca si ferma a 300 movimenti senza dare il
+    // seguito (con il conto di Anna sono arrivati solo i 300 più vecchi). L'aggiornamento normale (dal ≥ 89 giorni fa)
+    // resta una richiesta sola, così l'accesso automatico sta nei 4 al giorno concessi dalla banca.
+    // Storico completo: si parte da 2 anni fa; i periodi più vecchi di quanto la banca conceda si saltano.
     // deno-lint-ignore no-explicit-any
     const righe: any[] = [];
-    let ck: string | undefined;
-    do {
-      const q = new URLSearchParams(dal ? { date_from: dal } : { strategy: "longest" });
-      if (ck) q.set("continuation_key", ck);
-      const r = await eb("GET", `/accounts/${c.account_uid}/transactions?${q}`, undefined, ip);
-      righe.push(...(r.transactions || []));
-      ck = r.continuation_key || undefined;
-    } while (ck);
+    const oggi = iso(new Date()), FINESTRA = 90;
+    for (let da = dal || iso(new Date(Date.now() - 730 * GIORNO)); da <= oggi;) {
+      const a = iso(new Date(Math.min(Date.parse(da + "T00:00:00Z") + (FINESTRA - 1) * GIORNO, Date.now())));
+      let ck: string | undefined;
+      try {
+        do {
+          const q = new URLSearchParams({ date_from: da, date_to: a });
+          if (ck) q.set("continuation_key", ck);
+          const r = await eb("GET", `/accounts/${c.account_uid}/transactions?${q}`, undefined, ip);
+          righe.push(...(r.transactions || []));
+          ck = r.continuation_key || undefined;
+        } while (ck);
+      } catch (e) {
+        if (!(dal === null && e instanceof ErroreBanca && e.status >= 400 && e.status < 500 && !e.scaduto)) throw e;
+      }
+      da = iso(new Date(Date.parse(a + "T00:00:00Z") + GIORNO));
+    }
     const banca = righe.filter((t) => !t.status || t.status === "BOOK").map((t) => movimento(t, c.fonte))
       .filter((m) => m.data);
 
@@ -333,7 +346,7 @@ Deno.serve(async (req) => {
       if (error) throw error;
       const esiti = [];
       for (const c of data.filter((c) => puo(c.conto) && (!corpo.conto || c.conto === corpo.conto))) {
-        esiti.push(await sincronizza(c, user.id, ip));
+        esiti.push(await sincronizza(c, user.id, ip, !!corpo.completo)); // completo: tutto lo storico (prima ora dal consenso)
       }
       return risposta({ esiti });
     }
