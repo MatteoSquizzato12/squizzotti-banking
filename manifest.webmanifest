@@ -3,6 +3,7 @@
   "short_name": "Banking",
   "description": "Conti correnti di Matteo e Anna: movimenti, categorie e obiettivi.",
   "lang": "it",
+  "id": "/squizzotti-banking/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
