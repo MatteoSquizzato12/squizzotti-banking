@@ -119,6 +119,8 @@ function classifica(m,ctx){
   for(const r of regole){const t=norm(r.testo);if(t&&d.includes(t)&&ok(r.categoria)&&(!best||t.length>best.testo.length))best={testo:t,categoria:r.categoria};}
   if(best)return {id:best.categoria,come:"regola",regola:best.testo};
   const entrata=m.importo>0;
+  // Sulla carta prepagata (NEXI) la ricarica arriva come entrata: è lo stesso giroconto della ricarica partita dal conto.
+  if(m.causale==="CARTA"&&entrata&&/RICARIC/.test(d)&&ok("prepagata"))return {id:"prepagata",come:"causale"};
   const c=CAUSALI[m.causale];
   if(c&&ok(c)&&(c!=="banca"||!entrata))return {id:c,come:"causale"};
   for(const [lista,re] of DIZIONARIO){

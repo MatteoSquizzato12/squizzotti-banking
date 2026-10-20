@@ -212,3 +212,16 @@ create policy "banca_collegamenti: conti visibili" on public.banca_collegamenti
   for select to authenticated using ((select public.puo_vedere_conto(conto)));
 revoke all on public.banca_collegamenti from anon, authenticated;
 grant select (conto, iban, scade, collegato, ultimo_sync, esito) on public.banca_collegamenti to authenticated;
+
+-- ---------- Carta prepagata (NEXI) ----------
+-- Un conto dell'app può avere due collegamenti: fonte "conto" (Banca Valsabbina) e fonte "carta" (NEXI).
+-- I movimenti della carta hanno causale CARTA; carta_saldo / carta_saldo_al = saldo della prepagata letto da NEXI.
+alter table public.banca_attese add column if not exists banca text not null default 'valsabbina';
+alter table public.banca_collegamenti add column if not exists fonte text not null default 'conto';
+alter table public.banca_collegamenti drop constraint if exists banca_collegamenti_fonte_check;
+alter table public.banca_collegamenti add constraint banca_collegamenti_fonte_check check (fonte in ('conto', 'carta'));
+alter table public.banca_collegamenti drop constraint if exists banca_collegamenti_pkey;
+alter table public.banca_collegamenti add primary key (conto, fonte);
+grant select (fonte) on public.banca_collegamenti to authenticated;
+alter table public.conti add column if not exists carta_saldo numeric(12, 2);
+alter table public.conti add column if not exists carta_saldo_al date;

@@ -1,4 +1,5 @@
-// Squizzotti's Banking: collegamento con Banca Valsabbina tramite Enable Banking (PSD2, sola lettura).
+// Squizzotti's Banking: collegamento con Banca Valsabbina (conto corrente) e NEXI (carta prepagata) tramite
+// Enable Banking (PSD2, sola lettura). Ogni conto dell'app può avere un collegamento per fonte: "conto" e "carta".
 // La chiave privata dell'applicazione Enable Banking sta solo nei secret di Supabase (EB_APP_ID, EB_PRIVATE_KEY):
 // mai nel repository, mai nel browser. Pubblicazione: npx supabase functions deploy banca --no-verify-jwt
 //
@@ -13,8 +14,14 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 
 const EB = "https://api.enablebanking.com";
 const APP_URL = "https://matteosquizzato12.github.io/squizzotti-banking/";
-const BANCA = { name: "Banca Valsabbina", country: "IT" };
+// La prepagata non passa dal consenso Valsabbina: si legge da NEXI, che la gestisce.
+const BANCHE: Record<string, { aspsp: { name: string; country: string }; fonte: string }> = {
+  valsabbina: { aspsp: { name: "Banca Valsabbina", country: "IT" }, fonte: "conto" },
+  nexi: { aspsp: { name: "NEXI", country: "IT" }, fonte: "carta" },
+};
+const CARTA = "CARTA"; // causale dei movimenti della prepagata (NEXI non ha i codici causale di Valsabbina)
 const MANUALI = ["CONTANTI", "RETTIFICA"]; // movimenti scritti a mano: non vengono dalla banca
+const nonDelConto = `(${[...MANUALI, CARTA].join(",")})`; // righe che non fanno parte del saldo del conto corrente
 const GIORNO = 864e5;
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -68,12 +75,14 @@ const pulisci = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim();
 type Mov = { data: string; valuta: string | null; importo: number; causale: string; descrizione: string; chiave: string };
 // Stessa forma delle righe dell'XLS: la causale Valsabbina arriva come riga "Causale Movimento: XX", la descrizione
 // è il resto unito da spazi. Così la chiave anti-duplicati coincide con quella di js/logica.js (verificato riga per riga).
+// Per la carta la causale è sempre CARTA e la descrizione è il testo del movimento (o il nome della controparte).
 // deno-lint-ignore no-explicit-any
-function movimento(t: any): Mov {
+function movimento(t: any, fonte: string): Mov {
   const righe: string[] = t.remittance_information || [];
-  const c = righe.find((r) => /^Causale Movimento:/i.test(r));
-  const causale = c ? c.replace(/^Causale Movimento:\s*/i, "").trim() : "";
-  const descrizione = pulisci(righe.filter((r) => r !== c).join(" ")) || "Movimento senza descrizione";
+  const c = fonte === "conto" ? righe.find((r) => /^Causale Movimento:/i.test(r)) : undefined;
+  const causale = fonte === "carta" ? CARTA : c ? c.replace(/^Causale Movimento:\s*/i, "").trim() : "";
+  const descrizione = pulisci(righe.filter((r) => r !== c).join(" ")) || pulisci(t.creditor?.name || t.debtor?.name) ||
+    "Movimento senza descrizione";
   const importo = Math.round(Math.abs(Number(t.transaction_amount.amount)) * 100) / 100 *
     (t.credit_debit_indicator === "DBIT" ? -1 : 1);
   const data = t.booking_date || t.value_date;
@@ -95,15 +104,17 @@ async function tutte(q: () => any) {
 }
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-type Collegamento = { conto: string; sessione: string; account_uid: string; scade: string };
+type Collegamento = { conto: string; fonte: string; sessione: string; account_uid: string; scade: string };
+const COLONNE = "conto,fonte,sessione,account_uid,scade";
 // Scarica i movimenti nuovi di un conto, li salva senza doppioni e allinea il saldo a quello della banca.
 // completo = subito dopo il consenso: tutto lo storico che la banca concede (lo dà solo nella prima ora).
 async function sincronizza(c: Collegamento, chi: string | null, ip?: string, completo = false) {
   try {
     // Altrimenti si riparte da 10 giorni prima dell'ultimo movimento salvato (la banca a volte contabilizza in
     // ritardo), senza andare oltre gli ultimi 90 giorni concessi dopo la prima ora. Conto vuoto: tutto lo storico.
-    const { data: ult, error: e1 } = await db.from("movimenti").select("data").eq("conto", c.conto)
-      .not("causale", "in", `(${MANUALI.join(",")})`).order("data", { ascending: false }).limit(1);
+    const q0 = db.from("movimenti").select("data").eq("conto", c.conto);
+    const { data: ult, error: e1 } = await (c.fonte === "carta" ? q0.eq("causale", CARTA) : q0.not("causale", "in", nonDelConto))
+      .order("data", { ascending: false }).limit(1);
     if (e1) throw e1;
     let dal: string | null = null;
     if (ult.length && !completo) {
@@ -120,7 +131,8 @@ async function sincronizza(c: Collegamento, chi: string | null, ip?: string, com
       righe.push(...(r.transactions || []));
       ck = r.continuation_key || undefined;
     } while (ck);
-    const banca = righe.filter((t) => !t.status || t.status === "BOOK").map(movimento).filter((m) => m.data);
+    const banca = righe.filter((t) => !t.status || t.status === "BOOK").map((t) => movimento(t, c.fonte))
+      .filter((m) => m.data);
 
     // Doppioni: stessa chiave = stesso movimento, contando quante volte compare (8 caffè da 1 € nello stesso giorno
     // sono 8 movimenti veri). Entra solo la differenza tra le righe della banca e quelle già salvate.
@@ -139,7 +151,8 @@ async function sincronizza(c: Collegamento, chi: string | null, ip?: string, com
     if (nuovi.length) {
       const date = nuovi.map((m) => m.data).sort();
       const { data: imp, error } = await db.from("importazioni").insert({
-        conto: c.conto, nome_file: "Collegamento banca", dal: date[0], al: date[date.length - 1],
+        conto: c.conto, nome_file: c.fonte === "carta" ? "Carta prepagata" : "Collegamento banca",
+        dal: date[0], al: date[date.length - 1],
         righe_file: banca.length, righe_importate: nuovi.length, righe_duplicate: banca.length - nuovi.length,
         caricato_da: chi,
       }).select("id").single();
@@ -154,8 +167,9 @@ async function sincronizza(c: Collegamento, chi: string | null, ip?: string, com
       }
     }
 
-    // Saldo: quello della banca. saldo_base = saldo − somma dei movimenti della banca salvati, così l'app
-    // (che calcola saldo_base + movimenti, anche mese per mese) mostra lo stesso numero dell'home banking.
+    // Saldo: quello della banca. Conto corrente: saldo_base = saldo − somma dei movimenti del conto salvati, così
+    // l'app (che calcola saldo_base + movimenti, anche mese per mese) mostra lo stesso numero dell'home banking.
+    // Carta: il saldo della prepagata va in carta_saldo, a parte.
     const b = await eb("GET", `/accounts/${c.account_uid}/balances`, undefined, ip);
     // deno-lint-ignore no-explicit-any
     const saldi: any[] = b.balances || [];
@@ -164,23 +178,31 @@ async function sincronizza(c: Collegamento, chi: string | null, ip?: string, com
     let saldo = null;
     if (s) {
       saldo = Math.abs(Number(s.balance_amount.amount)) * (s.credit_debit_indicator === "DBIT" || Number(s.balance_amount.amount) < 0 ? -1 : 1);
-      const tutti = await tutte(() =>
-        db.from("movimenti").select("importo").eq("conto", c.conto).not("causale", "in", `(${MANUALI.join(",")})`)
-      );
-      const somma = tutti.reduce((x, m) => x + Number(m.importo), 0);
-      const { error } = await db.from("conti").update({
-        saldo_base: Math.round((saldo - somma) * 100) / 100,
-        saldo_al: s.reference_date || iso(new Date()),
-      }).eq("id", c.conto);
+      const al = s.reference_date || iso(new Date());
+      let campi;
+      if (c.fonte === "carta") campi = { carta_saldo: saldo, carta_saldo_al: al };
+      else {
+        const tutti = await tutte(() =>
+          db.from("movimenti").select("importo").eq("conto", c.conto).not("causale", "in", nonDelConto)
+        );
+        const somma = tutti.reduce((x, m) => x + Number(m.importo), 0);
+        campi = { saldo_base: Math.round((saldo - somma) * 100) / 100, saldo_al: al };
+      }
+      const { error } = await db.from("conti").update(campi).eq("id", c.conto);
       if (error) throw error;
     }
-    await db.from("banca_collegamenti").update({ ultimo_sync: new Date().toISOString(), esito: null }).eq("conto", c.conto);
-    return { conto: c.conto, nuovi: nuovi.length, saldo };
+    await db.from("banca_collegamenti").update({ ultimo_sync: new Date().toISOString(), esito: null })
+      .eq("conto", c.conto).eq("fonte", c.fonte);
+    return { conto: c.conto, fonte: c.fonte, nuovi: nuovi.length, saldo };
   } catch (e) {
     const scaduto = e instanceof ErroreBanca && e.scaduto;
     const esito = scaduto ? "scaduto" : String((e as Error).message || e).slice(0, 300);
-    await db.from("banca_collegamenti").update({ ultimo_sync: new Date().toISOString(), esito }).eq("conto", c.conto);
-    return { conto: c.conto, errore: scaduto ? "Il consenso della banca è scaduto: ricollega il conto." : esito };
+    await db.from("banca_collegamenti").update({ ultimo_sync: new Date().toISOString(), esito })
+      .eq("conto", c.conto).eq("fonte", c.fonte);
+    return {
+      conto: c.conto, fonte: c.fonte,
+      errore: scaduto ? "Il consenso è scaduto: ricollega." : esito,
+    };
   }
 }
 
@@ -201,8 +223,7 @@ Deno.serve(async (req) => {
     if (corpo.azione === "cron") {
       const segreto = Deno.env.get("CRON_SECRET");
       if (!segreto || req.headers.get("x-cron") !== segreto) throw new Rifiuto("Non autorizzato", 401);
-      const { data, error } = await db.from("banca_collegamenti").select("conto,sessione,account_uid,scade")
-        .gt("scade", new Date().toISOString());
+      const { data, error } = await db.from("banca_collegamenti").select(COLONNE).gt("scade", new Date().toISOString());
       if (error) throw error;
       const esiti = [];
       for (const c of data) esiti.push(await sincronizza(c, null));
@@ -218,12 +239,14 @@ Deno.serve(async (req) => {
     const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || undefined;
 
     if (corpo.azione === "avvia") {
+      const banca = corpo.banca || "valsabbina";
+      if (!BANCHE[banca]) throw new Rifiuto("Banca sconosciuta");
       await db.from("banca_attese").delete().lt("creato", new Date(Date.now() - GIORNO).toISOString());
-      const { data: a, error } = await db.from("banca_attese").insert({ user_id: user.id }).select("state").single();
+      const { data: a, error } = await db.from("banca_attese").insert({ user_id: user.id, banca }).select("state").single();
       if (error) throw error;
       const r = await eb("POST", "/auth", {
         access: { valid_until: new Date(Date.now() + 179 * GIORNO).toISOString() },
-        aspsp: BANCA, state: a.state, redirect_url: APP_URL, psu_type: "personal",
+        aspsp: BANCHE[banca].aspsp, state: a.state, redirect_url: APP_URL, psu_type: "personal",
       }, ip);
       return risposta({ url: r.url });
     }
@@ -236,9 +259,11 @@ Deno.serve(async (req) => {
       }
       if (!a.sessione) { // il codice della banca vale una volta sola: se la pagina viene ricaricata si riusa la sessione
         const s = await eb("POST", "/sessions", { code: corpo.code }, ip);
+        // Ultime 4 cifre dell'IBAN o, per le carte, del numero della carta (mascherato dalla banca).
         // deno-lint-ignore no-explicit-any
         const conti = (s.accounts || []).map((x: any) => ({
-          uid: x.uid, nome: x.name || "", iban: String(x.account_id?.iban || "").slice(-4),
+          uid: x.uid, nome: x.name || x.product || x.details || "",
+          iban: String(x.account_id?.iban || x.account_id?.other?.identification || x.details || "").replace(/\D/g, "").slice(-4),
           suggerito: /,/.test(x.name || "") ? "comune" : me.persona,
         }));
         const { error } = await db.from("banca_attese").update({ sessione: s.session_id, conti, scade: s.access?.valid_until })
@@ -246,7 +271,7 @@ Deno.serve(async (req) => {
         if (error) throw error;
         Object.assign(a, { sessione: s.session_id, conti, scade: s.access?.valid_until });
       }
-      return risposta({ conti: a.conti, scade: a.scade });
+      return risposta({ conti: a.conti, scade: a.scade, banca: a.banca });
     }
 
     if (corpo.azione === "abbina") {
@@ -263,15 +288,22 @@ Deno.serve(async (req) => {
         if (visti.has(x.conto)) throw new Rifiuto("Due conti della banca sullo stesso conto dell'app");
         visti.add(x.conto);
       }
+      const fonte = BANCHE[a.banca || "valsabbina"].fonte;
       const righe = scelte.map((x: { uid: string; conto: string }) => ({
-        conto: x.conto, sessione: a.sessione, account_uid: x.uid,
+        conto: x.conto, fonte, sessione: a.sessione, account_uid: x.uid,
         // deno-lint-ignore no-explicit-any
         iban: a.conti.find((c: any) => c.uid === x.uid).iban, scade: a.scade,
         collegato: new Date().toISOString(), collegato_da: user.id, ultimo_sync: null, esito: null,
       }));
       if (righe.length) {
-        const { error } = await db.from("banca_collegamenti").upsert(righe, { onConflict: "conto" });
+        const { error } = await db.from("banca_collegamenti").upsert(righe, { onConflict: "conto,fonte" });
         if (error) throw error;
+      }
+      // Con la carta collegata le ricariche dal conto sono un giroconto: le spese vere sono i movimenti della carta.
+      if (fonte === "carta") {
+        for (const r of righe) {
+          await db.from("categorie").update({ tipo: "trasferimento" }).eq("conto", r.conto).eq("id", "prepagata");
+        }
       }
       await db.from("banca_attese").delete().eq("state", a.state);
       const esiti = [];
@@ -280,7 +312,7 @@ Deno.serve(async (req) => {
     }
 
     if (corpo.azione === "aggiorna") {
-      const { data, error } = await db.from("banca_collegamenti").select("conto,sessione,account_uid,scade");
+      const { data, error } = await db.from("banca_collegamenti").select(COLONNE);
       if (error) throw error;
       const esiti = [];
       for (const c of data.filter((c) => puo(c.conto) && (!corpo.conto || c.conto === corpo.conto))) {
@@ -291,9 +323,11 @@ Deno.serve(async (req) => {
 
     if (corpo.azione === "scollega") {
       if (!puo(corpo.conto)) throw new Rifiuto("Conto non accessibile", 403);
-      const { data: c } = await db.from("banca_collegamenti").select("sessione").eq("conto", corpo.conto).maybeSingle();
+      const fonte = corpo.fonte || "conto";
+      const { data: c } = await db.from("banca_collegamenti").select("sessione").eq("conto", corpo.conto).eq("fonte", fonte)
+        .maybeSingle();
       if (c) {
-        await db.from("banca_collegamenti").delete().eq("conto", corpo.conto);
+        await db.from("banca_collegamenti").delete().eq("conto", corpo.conto).eq("fonte", fonte);
         const { count } = await db.from("banca_collegamenti").select("conto", { count: "exact", head: true })
           .eq("sessione", c.sessione);
         if (!count) await eb("DELETE", `/sessions/${c.sessione}`).catch(() => null); // nessun altro conto la usa: revoca il consenso

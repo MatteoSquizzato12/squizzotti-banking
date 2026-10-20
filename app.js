@@ -5,7 +5,8 @@ const MESI3=["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","
 const CONTANTI="CONTANTI"; // causale dei movimenti fuori banca scritti a mano (il nome è rimasto quello della prima versione)
 const nomeExtra=()=>S.conto==="anna"?"Rifle":"Altro"; // nome del pulsante e dell'etichetta: per Anna è "Rifle"
 const RETTIFICA="RETTIFICA"; // correzione scritta a mano che non fa parte della scheda Altro
-const CAUSALI={"CONTANTI":"Fuori banca","RETTIFICA":"Rettifica scritta a mano","(2":"Pagamento con carta","VH":"Pagamento POS","TE":"Addebito diretto","U2":"Utenza telefonica","M4":"Bonifico in uscita","W7":"Bonifico istantaneo in uscita","W8":"Bonifico istantaneo in entrata","BP":"Bonifico in entrata","3B":"Bonifico in entrata","B8":"Emolumenti","2U":"Ricarica prepagata","EB":"Commissioni","5E":"Commissioni bonifico","0F":"Commissioni prepagata","2J":"Commissioni prepagata","18":"Competenze e spese","4K":"Imposta di bollo","4Y":"Canone carta","FT":"F24","(0":"Prelievo","F8":"Rimborso"};
+const CARTA="CARTA"; // movimenti della carta prepagata, letti da NEXI: non fanno parte del saldo del conto corrente
+const CAUSALI={"CONTANTI":"Fuori banca","RETTIFICA":"Rettifica scritta a mano","CARTA":"Carta prepagata (NEXI)","(2":"Pagamento con carta","VH":"Pagamento POS","TE":"Addebito diretto","U2":"Utenza telefonica","M4":"Bonifico in uscita","W7":"Bonifico istantaneo in uscita","W8":"Bonifico istantaneo in entrata","BP":"Bonifico in entrata","3B":"Bonifico in entrata","B8":"Emolumenti","2U":"Ricarica prepagata","EB":"Commissioni","5E":"Commissioni bonifico","0F":"Commissioni prepagata","2J":"Commissioni prepagata","18":"Competenze e spese","4K":"Imposta di bollo","4Y":"Canone carta","FT":"F24","(0":"Prelievo","F8":"Rimborso"};
 const COME={manuale:"Scelta a mano su questo movimento",regola:"Regola imparata",causale:"Riconosciuta dal codice causale della banca",dizionario:"Riconosciuta dall'elenco degli esercenti",predefinita:"Non riconosciuta"};
 const PROTETTE=["da-classificare","altre-entrate","saldo-iniziale"]; // servono come ripiego o hanno un significato fisso: non si eliminano
 const SALDO="saldo-iniziale"; // soldi portati dal vecchio conto: né entrate né giroconti
@@ -222,7 +223,7 @@ function vPanoramica(C){
 // Saldo del conto corrente = saldo_base del conto + somma dei movimenti della banca (senza voci scritte a mano).
 // saldo_base è il saldo prima del primo movimento salvato: con il collegamento alla banca lo ricalcola la funzione
 // "banca" a ogni aggiornamento (saldo_al = giorno del saldo letto dalla banca), così il totale è quello dell'home banking.
-const daBanca=m=>m.causale!==CONTANTI&&m.causale!==RETTIFICA;
+const daBanca=m=>m.causale!==CONTANTI&&m.causale!==RETTIFICA&&m.causale!==CARTA; // solo il conto corrente
 const contoAttivo=()=>D.conti.find(c=>c.id===S.conto)||{};
 const sommaBanca=(C,fino)=>C.mov.filter(m=>daBanca(m)&&(!fino||m.data<=fino)).reduce((s,m)=>s+m.importo,0);
 function saldi(C){
@@ -231,9 +232,11 @@ function saldi(C){
   return {banca:base+sommaBanca(C),base,al:sal&&sal>al?sal:al,dallaBanca:!!sal,altro:extra.reduce((s,m)=>s+m.importo,0),nAltro:extra.length};
 }
 function cardSaldi(C){
-  const x=saldi(C),nome=nomeExtra();
+  const x=saldi(C),nome=nomeExtra(),ca=contoAttivo(),carta=ca.carta_saldo_al!=null;
+  const n=1+(S.conto==="comune"?0:1)+(carta?1:0);
   return `<div class="card saldi"><div class="card-head"><h2 class="dotted">Numeri del conto</h2></div>
-  <div class="saldigrid${S.conto==="comune"?" uno":""}"><div class="saldo" title="${x.dallaBanca?"Saldo comunicato da Banca Valsabbina all'ultimo aggiornamento":"Somma dei movimenti della banca salvati"}"><div class="k">Saldo conto corrente</div><div class="big num">${eur(x.banca)}</div><div class="d">${x.al?"al "+giorno(x.al):"nessun movimento salvato"}</div></div>
+  <div class="saldigrid${n===1?" uno":n===3?" tre":""}"><div class="saldo" title="${x.dallaBanca?"Saldo comunicato da Banca Valsabbina all'ultimo aggiornamento":"Somma dei movimenti della banca salvati"}"><div class="k">Saldo conto corrente</div><div class="big num">${eur(x.banca)}</div><div class="d">${x.al?"al "+giorno(x.al):"nessun movimento salvato"}</div></div>
+  ${carta?`<div class="saldo" title="Saldo della carta prepagata comunicato da NEXI"><div class="k">Saldo prepagata</div><div class="big num">${eur(Number(ca.carta_saldo||0))}</div><div class="d">al ${giorno(ca.carta_saldo_al)}</div></div>`:""}
   ${S.conto==="comune"?"":`<div class="saldo"><div class="k">Saldo ${nome}</div><div class="big num">${eurS(x.altro)}</div></div>`}</div></div>`;
 }
 /* ---------- ciambella delle uscite ---------- */
@@ -370,7 +373,7 @@ function renderLista(){
 function rigaMov(m,C){
   const [,mm,dd]=m.data.split("-"),c=m._c,todo=c.id==="da-classificare";
   return `<button class="mov" data-act="mov" data-id="${m.id}"><span class="dt"><b>${+dd}</b>${MESI3[+mm-1]}</span>
-    <span style="min-width:0"><span class="who" style="display:block">${esc(m._e)}</span><span class="sub">${m.causale===CONTANTI?`<span class="pill cash">${nomeExtra().toLowerCase()}</span>`:m.causale===RETTIFICA?`<span class="pill">rettifica</span>`:""}<span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
+    <span style="min-width:0"><span class="who" style="display:block">${esc(m._e)}</span><span class="sub">${m.causale===CONTANTI?`<span class="pill cash">${nomeExtra().toLowerCase()}</span>`:m.causale===RETTIFICA?`<span class="pill">rettifica</span>`:m.causale===CARTA?`<span class="pill cash">prepagata</span>`:""}<span class="pill${todo?" todo":""}${c.come==="manuale"?" manual":""}">${esc(nomeCat(c.id))}</span>${m.nota?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.nota)}</span>`:""}</span></span>
     <span class="amt num${m.importo>0?" pos":""}">${eurS(m.importo)}</span></button>`;
 }
 function chipsCategorie(C,sel){
@@ -641,10 +644,15 @@ async function funzioneBanca(azione,dati){
   if(error){let m=error.message;try{const j=await error.context.json();if(j.errore)m=j.errore;}catch(e){}throw new Error(m);}
   return data;
 }
+// D.banca[conto][fonte]: fonte "conto" = Banca Valsabbina, "carta" = prepagata letta da NEXI.
 async function caricaCollegamenti(){
-  const {data,error}=await sb.from("banca_collegamenti").select("conto,iban,scade,collegato,ultimo_sync,esito");
-  D.banca=error?{}:Object.fromEntries(data.map(c=>[c.conto,c])); // tabella assente = schema.sql non ancora rieseguito
+  let r=await sb.from("banca_collegamenti").select("conto,fonte,iban,scade,collegato,ultimo_sync,esito");
+  if(r.error)r=await sb.from("banca_collegamenti").select("conto,iban,scade,collegato,ultimo_sync,esito"); // colonna fonte non ancora creata
+  D.banca={};if(r.error)return; // tabella assente = schema.sql non ancora rieseguito
+  for(const c of r.data)(D.banca[c.conto]??={})[c.fonte||"conto"]=c;
 }
+const FONTI={conto:{banca:"valsabbina",titolo:"Conto corrente",nome:"Banca Valsabbina",cosa:"conto"},
+  carta:{banca:"nexi",titolo:"Carta prepagata",nome:"NEXI",cosa:"carta"}};
 async function ricaricaConti(){
   const {data}=await sb.from("conti").select("*");
   if(data)D.conti=D.conti.map(c=>data.find(x=>x.id===c.id)||c);
@@ -652,23 +660,30 @@ async function ricaricaConti(){
 const quando=ts=>{const d=new Date(ts),o=new Date(),ieri=new Date(o.getTime()-864e5),ora=d.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
   return d.toDateString()===o.toDateString()?"oggi alle "+ora:d.toDateString()===ieri.toDateString()?"ieri alle "+ora:giorno(d.toISOString().slice(0,10))+" alle "+ora;};
 const giorniA=ts=>Math.ceil((new Date(ts)-Date.now())/864e5);
-function cardBanca(){
-  const c=D.banca[S.conto],nome=esc(contoNome(S.conto)),occ=S.banca;
-  if(!c)return `<div class="card" style="margin-top:16px"><div class="card-head"><h2 class="dotted">Collegamento con la banca</h2></div>
-    <p>Collega il conto ${nome} a Banca Valsabbina: i movimenti nuovi arriveranno da soli due volte al giorno, senza scaricare file.</p>
-    <p class="hint" style="margin:8px 0 14px">Sola lettura: l'app vede movimenti e saldo, non può disporre pagamenti. Il consenso si dà sul sito della banca, vale 6 mesi e passa da Enable Banking, un intermediario autorizzato.</p>
-    <button class="btn" data-act="banca-collega" ${occ?"disabled":""}>${occ==="collega"?"Apro la banca…":"Collega la banca"}</button></div>`;
-  const gg=giorniA(c.scade),scaduto=c.esito==="scaduto"||gg<=0,conf=S.conferma.scollega&&Date.now()-S.conferma.scollega<4000;
-  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2 class="dotted">Collegamento con la banca</h2></div>
-    <div class="facts"><div><span>Banca</span> Banca Valsabbina${c.iban?" · conto …"+esc(c.iban):""}</div>
+// Un blocco per fonte. Il conto in comune non ha una prepagata propria da collegare qui se nessuno l'ha collegata.
+function bloccoBanca(fonte){
+  const F=FONTI[fonte],c=(D.banca[S.conto]||{})[fonte],occ=S.banca,ap=occ==="collega-"+fonte;
+  const testa=`<div class="sec"><h3>${F.titolo} <span class="meta">· ${F.nome}</span></h3>`;
+  if(!c)return testa+(fonte==="conto"
+    ?`<p>Collega il conto ${esc(contoNome(S.conto))} a Banca Valsabbina: i movimenti nuovi arriveranno da soli due volte al giorno.</p>`
+    :`<p>Collega la prepagata da NEXI: le spese fatte con la carta entrano in questo conto con le loro categorie e le ricariche diventano un giroconto, così non si contano due volte.</p>`)+`
+    <button class="btn${fonte==="carta"?" ghost":""}" style="margin-top:10px" data-act="banca-collega" data-fonte="${fonte}" ${occ?"disabled":""}>${ap?"Apro "+F.nome+"…":fonte==="conto"?"Collega la banca":"Collega la prepagata"}</button></div>`;
+  const gg=giorniA(c.scade),scaduto=c.esito==="scaduto"||gg<=0,k="scollega-"+fonte,conf=S.conferma[k]&&Date.now()-S.conferma[k]<4000;
+  return testa+`<div class="facts"><div><span>${fonte==="carta"?"Carta":"Conto"}</span> ${c.iban?"…"+esc(c.iban):F.nome}</div>
     <div><span>Ultimo aggiornamento</span> ${c.ultimo_sync?quando(c.ultimo_sync):"mai"}</div>
     <div><span>Consenso valido fino al</span> ${giorno(c.scade.slice(0,10))}</div></div>
-    ${scaduto?`<p class="warnline" style="margin-top:10px">Il consenso della banca è scaduto: i movimenti non arrivano più. Tocca «Rinnova il consenso» e rifai l'accesso alla banca.</p>`
+    ${scaduto?`<p class="warnline" style="margin-top:10px">Il consenso è scaduto: i movimenti non arrivano più. Tocca «Rinnova il consenso» e rifai l'accesso a ${F.nome}.</p>`
       :gg<=21?`<p class="warnline" style="margin-top:10px">Il consenso scade tra ${gg} ${gg===1?"giorno":"giorni"}: rinnovalo per non perdere aggiornamenti.</p>`
       :c.esito?`<p class="warnline" style="margin-top:10px">L'ultimo aggiornamento non è riuscito: ${esc(c.esito)}</p>`:""}
-    <div class="sh-foot" style="flex-wrap:wrap"><button class="btn ${conf?"danger":"ghost"} small" data-act="banca-scollega">${conf?"Tocca di nuovo per scollegare":"Scollega"}</button><span class="grow"></span>
-    <button class="btn ${scaduto||gg<=21?"":"ghost"}" data-act="banca-collega" ${occ?"disabled":""}>${occ==="collega"?"Apro la banca…":"Rinnova il consenso"}</button>
-    ${scaduto?"":`<button class="btn" data-act="banca-aggiorna" ${occ?"disabled":""}>${occ==="aggiorna"?"Aggiorno…":"Aggiorna ora"}</button>`}</div></div>`;
+    <div class="sh-foot" style="flex-wrap:wrap"><button class="btn ${conf?"danger":"ghost"} small" data-act="banca-scollega" data-fonte="${fonte}">${conf?"Tocca di nuovo per scollegare":"Scollega"}</button><span class="grow"></span>
+    <button class="btn ${scaduto||gg<=21?"":"ghost"}" data-act="banca-collega" data-fonte="${fonte}" ${occ?"disabled":""}>${ap?"Apro "+F.nome+"…":"Rinnova il consenso"}</button></div></div>`;
+}
+function cardBanca(){
+  const L0=D.banca[S.conto]||{},vivo=Object.values(L0).some(c=>c.esito!=="scaduto"&&giorniA(c.scade)>0);
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2 class="dotted">Collegamento con la banca</h2>
+    ${vivo?`<button class="btn small" data-act="banca-aggiorna" ${S.banca?"disabled":""}>${S.banca==="aggiorna"?"Aggiorno…":"Aggiorna ora"}</button>`:""}</div>
+    ${bloccoBanca("conto")}${bloccoBanca("carta")}
+    <p class="hint" style="margin-top:14px">Sola lettura: l'app vede movimenti e saldo, non può disporre pagamenti. Il consenso si dà sul sito della banca, vale 6 mesi e passa da Enable Banking, un intermediario autorizzato.</p></div>`;
 }
 function vBanca(C){
   let h=cardBanca();
@@ -680,13 +695,13 @@ function vBanca(C){
   h+=`</div>`;
   return h;
 }
-async function bancaCollega(){
-  S.banca="collega";renderMain();
-  try{const {url}=await funzioneBanca("avvia");location.href=url;}
-  catch(e){S.banca=null;renderMain();toast("Non riesco ad aprire la banca: "+e.message);}
+async function bancaCollega(fonte){
+  S.banca="collega-"+fonte;renderMain();
+  try{const {url}=await funzioneBanca("avvia",{banca:FONTI[fonte].banca});location.href=url;}
+  catch(e){S.banca=null;renderMain();toast("Non riesco ad aprire "+FONTI[fonte].nome+": "+e.message);}
 }
 const riassunto=esiti=>{const ok=esiti.filter(x=>!x.errore),n=ok.reduce((s,x)=>s+x.nuovi,0),ko=esiti.find(x=>x.errore);
-  return ko?`${contoNome(ko.conto)}: ${ko.errore}`:n?`Arrivati ${n} ${n===1?"movimento nuovo":"movimenti nuovi"}.`:"Nessun movimento nuovo: il conto è già aggiornato.";};
+  return ko?`${contoNome(ko.conto)}${ko.fonte==="carta"?" (prepagata)":""}: ${ko.errore}`:n?`Arrivati ${n} ${n===1?"movimento nuovo":"movimenti nuovi"}.`:"Nessun movimento nuovo: è già tutto aggiornato.";};
 async function dopoBanca(esiti){
   await Promise.all([caricaCollegamenti(),ricaricaConti()]);
   for(const k in D.c)if(k!==S.conto)delete D.c[k];
@@ -698,9 +713,10 @@ async function bancaAggiorna(){
   try{const {esiti}=await funzioneBanca("aggiorna",{conto:S.conto});await dopoBanca(esiti);}
   catch(e){S.banca=null;renderMain();toast("Aggiornamento non riuscito: "+e.message);}
 }
-async function bancaScollega(){
-  if(!(S.conferma.scollega&&Date.now()-S.conferma.scollega<4000)){S.conferma.scollega=Date.now();renderMain();setTimeout(()=>{if(S.tab==="banca")renderMain();},4100);return;}
-  try{await funzioneBanca("scollega",{conto:S.conto});await caricaCollegamenti();renderMain();toast("Conto scollegato: i movimenti già arrivati restano.");}
+async function bancaScollega(fonte){
+  const k="scollega-"+fonte;
+  if(!(S.conferma[k]&&Date.now()-S.conferma[k]<4000)){S.conferma[k]=Date.now();renderMain();setTimeout(()=>{if(S.tab==="banca")renderMain();},4100);return;}
+  try{await funzioneBanca("scollega",{conto:S.conto,fonte});await caricaCollegamenti();renderMain();toast((fonte==="carta"?"Prepagata":"Conto")+" scollegato: i movimenti già arrivati restano.");}
   catch(e){toast("Non riesco a scollegare: "+e.message);}
 }
 // Al ritorno dalla banca: apre la sessione e chiede a quale conto dell'app va ogni conto visto nel consenso.
@@ -709,17 +725,19 @@ async function confermaBanca(r){
   if(r.errore){renderAll();toast("La banca non ha dato il consenso: "+r.errore);return;}
   toast("Collegamento in corso…");
   try{
-    const {conti}=await funzioneBanca("conferma",r);
+    const {conti,banca}=await funzioneBanca("conferma",r);
     const usati=new Set();
     const scelte=conti.map(c=>{const s=D.conti.some(x=>x.id===c.suggerito)&&!usati.has(c.suggerito)?c.suggerito:"";if(s)usati.add(s);return s;});
-    sheet={tipo:"abbina",state:r.state,conti,scelte};renderAll();renderSheet();
+    sheet={tipo:"abbina",state:r.state,conti,scelte,carta:banca==="nexi"};renderAll();renderSheet();
   }catch(e){renderAll();toast("Collegamento non riuscito: "+e.message);}
 }
 function sheetAbbina(){
   const ok=sheet.scelte.some(Boolean);
-  return `<div class="sh-head"><div><div class="eyebrow">Banca Valsabbina</div><h2>Quali conti colleghi?</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
-  <p class="hint">Per ogni conto della banca scegli il conto dell'app in cui far arrivare i movimenti. I movimenti già presenti non vengono duplicati.</p>
-  ${sheet.conti.map((c,i)=>`<div class="sec"><h3>${esc(c.nome||"Conto")}${c.iban?` <span class="meta">· …${esc(c.iban)}</span>`:""}</h3>
+  const carta=sheet.carta;
+  return `<div class="sh-head"><div><div class="eyebrow">${carta?"NEXI · carta prepagata":"Banca Valsabbina"}</div><h2>${carta?"In quale conto va la carta?":"Quali conti colleghi?"}</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
+  <p class="hint">${carta?"Scegli il conto dell'app in cui far arrivare le spese della carta: di solito quello da cui parte la ricarica.":"Per ogni conto della banca scegli il conto dell'app in cui far arrivare i movimenti."} I movimenti già presenti non vengono duplicati.</p>
+  ${sheet.conti.length?"":`<p class="warnline">${carta?"NEXI":"La banca"} non ha mandato nessun conto. Se hai dato il consenso, il conto va prima collegato anche nel pannello di controllo di Enable Banking.</p>`}
+  ${sheet.conti.map((c,i)=>`<div class="sec"><h3>${esc(c.nome||(carta?"Carta":"Conto"))}${c.iban?` <span class="meta">· …${esc(c.iban)}</span>`:""}</h3>
     <div class="chips">${D.conti.map(x=>`<button class="chip" data-act="abbina-scegli" data-i="${i}" data-conto="${x.id}" aria-pressed="${sheet.scelte[i]===x.id}">${esc(x.nome)}</button>`).join("")}
     <button class="chip" data-act="abbina-scegli" data-i="${i}" data-conto="" aria-pressed="${!sheet.scelte[i]}">Non collegare</button></div></div>`).join("")}
   <div class="sh-foot"><span class="grow"></span><button class="btn ghost" data-act="chiudi">Annulla</button><button class="btn" data-act="abbina-ok" id="abbina-ok" ${ok&&!sheet.occ?"":"disabled"}>${sheet.occ?"Scarico i movimenti…":"Collega e scarica i movimenti"}</button></div>`;
@@ -794,9 +812,9 @@ document.addEventListener("click",e=>{
   else if(a==="obi-f"){sheet.f[b.dataset.k]=b.dataset.v;renderSheet();}
   else if(a==="obi-salva")salvaObi();
   else if(a==="obi-elimina")eliminaObi();
-  else if(a==="banca-collega")bancaCollega();
+  else if(a==="banca-collega")bancaCollega(b.dataset.fonte||"conto");
   else if(a==="banca-aggiorna")bancaAggiorna();
-  else if(a==="banca-scollega")bancaScollega();
+  else if(a==="banca-scollega")bancaScollega(b.dataset.fonte||"conto");
   else if(a==="abbina-scegli"){const i=+b.dataset.i,c=b.dataset.conto;sheet.scelte=sheet.scelte.map((x,j)=>j===i?c:c&&x===c?"":x);renderSheet();} // un conto dell'app riceve un solo conto della banca
   else if(a==="abbina-ok")abbina();
 });

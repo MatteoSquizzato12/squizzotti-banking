@@ -345,3 +345,5 @@ table.heat tfoot th{text-align:left}
 @media (min-width:641px){.nav .tabs{display:none}}
 @media (max-width:640px){.menu{display:none}.topbar .conti{flex:1 1 100%}}
 #main>.card.empty:first-child,#main>.loading:first-child{margin-top:16px}
+.saldigrid.tre{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.saldigrid.tre{grid-template-columns:repeat(2,minmax(0,1fr))}.saldigrid.tre .saldo:first-child{grid-column:1/-1}}
