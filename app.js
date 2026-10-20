@@ -169,7 +169,7 @@ function renderTabs(){
 // Intestazione delle pagine interne: «‹ Impostazioni» e il titolo. Movimenti ha il tasto solo sul telefono (sul PC sta nel menu).
 function testaPagina(id){
   const p=PADRE[id],nomeP=p==="panoramica"?"Dashboard":"Impostazioni";
-  return `<div class="pagina${id==="movimenti"?" solo-tel":""}"><button class="indietro" data-act="tab" data-tab="${p}"><span aria-hidden="true">‹</span> ${nomeP}</button><h1>${TITOLI[id]}</h1></div>`;
+  return `<div class="pagina${id==="movimenti"?" solo-tel":""}"><button class="indietro" data-act="tab" data-tab="${p}"><span aria-hidden="true">‹</span> ${nomeP}</button><h1>${TITOLI[id]}</h1><p class="meta">Conto ${esc(contoNome(S.conto))}</p></div>`;
 }
 function renderMain(){
   const C=C0(),el=$("main");
@@ -182,17 +182,59 @@ function renderMain(){
   else if(S.tab==="dashboard")el.innerHTML=vDashboard(C);
   else if(S.tab==="impostazioni")el.innerHTML=vImpostazioni(C);
   else el.innerHTML=testaPagina("banca")+vBanca(C);
+  centraCarosello();
   disegnaGrafici();tipTorta();if(S.tab==="dashboard")disegnaDashboard();
   document.body.classList.toggle("wide",S.tab==="dashboard");
   const ml=el.querySelector(".mesi"),on=ml&&ml.querySelector('[aria-pressed="true"]');
   if(on&&ml.scrollWidth>ml.clientWidth)ml.scrollLeft=on.offsetLeft-ml.offsetLeft-(ml.clientWidth-on.offsetWidth)/2;
 }
+let scorroIo=false;
+function centraCarosello(){
+  const el=$("carosello"),c=el&&el.querySelector(".cartaconto.sel");if(!c||el.scrollWidth<=el.clientWidth)return;
+  scorroIo=true;el.scrollLeft=c.offsetLeft-el.offsetLeft-(el.clientWidth-c.offsetWidth)/2;setTimeout(()=>scorroIo=false,80);
+}
+// Scorrendo le schede col dito, quando si fermano si apre il conto al centro.
+let scT;document.addEventListener("scroll",e=>{
+  const el=e.target;if(el.id!=="carosello"||scorroIo)return;clearTimeout(scT);
+  scT=setTimeout(()=>{const mezzo=el.scrollLeft+el.clientWidth/2;let best=null,dist=1e9;
+    for(const c of el.querySelectorAll(".cartaconto")){const m=c.offsetLeft-el.offsetLeft+c.offsetWidth/2,dd=Math.abs(m-mezzo);if(dd<dist){dist=dd;best=c;}}
+    if(best&&best.dataset.id!==S.conto)apriConto(best.dataset.id);},140);
+},true);
 function nessunDato(C){
   return `<div class="card empty"><b>Nessun movimento</b>Collega il conto ${esc(contoNome(S.conto))} a Banca Valsabbina: i movimenti arriveranno da soli.<br><br><button class="btn" data-act="tab" data-tab="banca">Collega la banca</button>${S.tab==="movimenti"?` <button class="btn ghost" data-act="contanti-nuovo">+ ${nomeExtra()}</button>`:""}</div>`;
 }
 // Mese/Anno + una casella per ogni anno con movimenti e (in modalità Mese) per ogni mese dell'anno scelto.
+// Sul telefono le caselle di anni e mesi non ci stanno: «‹ Ottobre 2026 ›» con le frecce, e un tocco sul nome apre la scelta.
+const TEL="(max-width:820px),(pointer:coarse) and (max-width:1024px)"; // uguale a app.css
+const telefono=()=>matchMedia(TEL).matches;
+const maiuscola=s=>s.charAt(0).toUpperCase()+s.slice(1);
+function limitiPeriodo(){const C=C0(),o=ymOggi();return {min:C.primo||o,max:C.ultimo&&C.ultimo>o?C.ultimo:o};}
+function passoPeriodo(d){
+  const L1=limitiPeriodo();let k;
+  if(S.per==="anno"){k=(+S.mese.slice(0,4)+d)+S.mese.slice(4);if(k.slice(0,4)<L1.min.slice(0,4)||k.slice(0,4)>L1.max.slice(0,4))return;}
+  else{k=ymAdd(S.mese,d);if(k<L1.min||k>L1.max)return;}
+  S.mese=k;S.lim=150;nascondiTip();renderMain();
+}
+function barraPeriodoTel(opts){
+  const L1=limitiPeriodo(),anno=S.mese.slice(0,4),tutto=S.per==="tutto";
+  const prima=S.per==="anno"?anno>L1.min.slice(0,4):S.mese>L1.min,dopo=S.per==="anno"?anno<L1.max.slice(0,4):S.mese<L1.max;
+  const nome=tutto?"Tutto lo storico":S.per==="anno"?"Anno "+anno:maiuscola(ymNome(S.mese));
+  return `<div class="ptel"><div class="seg" role="group" aria-label="Periodo">${opts.map(([k,t])=>`<button data-act="per" data-per="${k}" aria-pressed="${S.per===k}">${t}</button>`).join("")}</div>
+    ${tutto?"":`<div class="pnav"><button class="pfreccia" data-act="per-passo" data-d="-1" aria-label="Periodo precedente" ${prima?"":"disabled"}>‹</button>
+    <button class="plab" data-act="per-scegli">${nome}<span class="caret" aria-hidden="true">▾</span></button>
+    <button class="pfreccia" data-act="per-passo" data-d="1" aria-label="Periodo successivo" ${dopo?"":"disabled"}>›</button></div>`}</div>`;
+}
+function sheetPeriodo(){
+  const C=C0(),L1=limitiPeriodo(),y=sheet.y,anni=[];
+  for(let a=+L1.min.slice(0,4);a<=+L1.max.slice(0,4);a++)anni.push(String(a));
+  return `<div class="sh-head"><div><div class="eyebrow">Periodo</div><h2>${S.per==="anno"?"Scegli l'anno":"Scegli il mese"}</h2></div><button class="iconbtn" data-act="chiudi" aria-label="Chiudi">×</button></div>
+  <div class="chips" style="margin-bottom:14px">${anni.map(a=>`<button class="chip" data-act="p-anno" data-y="${a}" aria-pressed="${a===y}">${a}</button>`).join("")}</div>
+  ${S.per==="anno"?"":`<div class="mesigrid">${MESI3.map((m,i)=>{const k=y+"-"+String(i+1).padStart(2,"0"),fuori=k<L1.min||k>L1.max;
+    return `<button class="pchip${C.tot[k]?"":" vuoto"}" data-act="p-mese" data-ym="${k}" aria-pressed="${k===S.mese}" ${fuori?"disabled":""}>${m}</button>`;}).join("")}</div>`}`;
+}
 function barraPeriodo(conTutto){
   const C=C0(),opts=[["mese","Mese"],["anno","Anno"]];if(conTutto)opts.push(["tutto","Tutto"]);
+  if(telefono())return barraPeriodoTel(opts);
   let h=`<div class="toolbar periodi"><div class="seg" role="group" aria-label="Periodo">${opts.map(([k,t])=>`<button data-act="per" data-per="${k}" aria-pressed="${S.per===k}">${t}</button>`).join("")}</div>`;
   if(S.per!=="tutto"){
     const anno=S.mese.slice(0,4),y0=+(C.primo||anno).slice(0,4),y1=Math.max(+(C.ultimo||anno).slice(0,4),+anno),anni=[];
@@ -211,11 +253,11 @@ function scegliAnno(y){
 }
 /* ---------- panoramica ---------- */
 function vPanoramica(C){
-  if(!C.mov.length)return nessunDato(C);
+  if(!C.mov.length)return cardConti("banca")+nessunDato(C);
   if(S.per==="tutto")S.per="anno";
   const T=totPeriodo(),ms=visibili(),todo=daClassificare(ms).length;
   const quota=T.e>0?Math.round(T.r/T.e*100):null;
-  let h=cardSaldi(C)+cardUltimi(C)+barraPeriodo(false);
+  let h=cardConti("banca")+cardUltimi(C)+barraPeriodo(false);
   if(todo)h+=`<div class="banner"><p><b>${todo} ${todo===1?"movimento":"movimenti"} da classificare</b> in questo periodo. Ogni correzione insegna all'app a riconoscerli da sola.</p><button class="btn small" data-act="vai-todo">Classifica ora</button></div>`;
   const PV="polizza-vita",pv=C.mov.some(m=>m._c.id===PV||radice(m._c.id)===PV);
   const pvSomma=ms=>-ms.filter(m=>m._c.id===PV||radice(m._c.id)===PV).reduce((s,m)=>s+m.importo,0);
@@ -244,18 +286,37 @@ function vPanoramica(C){
 const daBanca=m=>m.causale!==CONTANTI&&m.causale!==RETTIFICA&&m.causale!==CARTA; // solo il conto corrente
 const contoAttivo=()=>D.conti.find(c=>c.id===S.conto)||{};
 const sommaBanca=(C,fino)=>C.mov.filter(m=>daBanca(m)&&(!fino||m.data<=fino)).reduce((s,m)=>s+m.importo,0);
-function saldi(C){
-  const base=Number(contoAttivo().saldo_base||0),banca=C.mov.filter(daBanca),extra=C.mov.filter(m=>m.causale===CONTANTI);
-  const al=banca.reduce((a,m)=>m.data>a?m.data:a,""),sal=contoAttivo().saldo_al;
+function saldi(C,id=S.conto){
+  const ca=D.conti.find(c=>c.id===id)||{},base=Number(ca.saldo_base||0),banca=C.mov.filter(daBanca),extra=C.mov.filter(m=>m.causale===CONTANTI);
+  const al=banca.reduce((a,m)=>m.data>a?m.data:a,""),sal=ca.saldo_al;
   return {banca:base+sommaBanca(C),base,al:sal&&sal>al?sal:al,dallaBanca:!!sal,altro:extra.reduce((s,m)=>s+m.importo,0),nAltro:extra.length};
 }
-function cardSaldi(C){
-  const x=saldi(C),nome=nomeExtra(),ca=contoAttivo(),carta=ca.carta_saldo_al!=null;
-  const n=1+(S.conto==="comune"?0:1)+(carta?1:0);
-  return `<div class="card saldi"><div class="card-head"><h2>Numeri del conto</h2>${bottoneOcchio()}</div>
-  <div class="saldigrid${n===1?" uno":n===3?" tre":""}"><div class="saldo" title="${x.dallaBanca?"Saldo comunicato da Banca Valsabbina all'ultimo aggiornamento":"Somma dei movimenti della banca salvati"}"><div class="k">Saldo conto corrente</div><div class="big num">${eur(x.banca)}</div><div class="d">${x.al?"al "+giorno(x.al):"nessun movimento salvato"}</div></div>
-  ${carta?`<div class="saldo" title="Saldo della carta prepagata comunicato da NEXI"><div class="k">Saldo prepagata</div><div class="big num">${eur(Number(ca.carta_saldo||0))}</div><div class="d">al ${giorno(ca.carta_saldo_al)}</div></div>`:""}
-  ${S.conto==="comune"?"":`<div class="saldo"><div class="k">Saldo ${nome}</div><div class="big num">${eurS(x.altro)}</div></div>`}</div></div>`;
+const nomeExtraDi=id=>id==="anna"?"Rifle":"Altro";
+// Schede dei conti, come la carta nelle app delle banche: sul telefono si scorrono col dito (il conto al centro è
+// quello aperto), sul PC stanno affiancate. modo "banca" = saldo del conto corrente, "altro" = saldo Altro / Rifle.
+function cardConti(modo){
+  return `<div class="carosello" id="carosello" data-modo="${modo}">${D.conti.map(c=>cartaConto(c,modo)).join("")}</div>
+  ${D.conti.length>1?`<div class="puntini" role="group" aria-label="Conti">${D.conti.map(c=>`<button data-act="conto" data-id="${c.id}" aria-label="${esc(c.nome)}" aria-pressed="${c.id===S.conto}"></button>`).join("")}</div>`:""}`;
+}
+function cartaConto(c,modo){
+  const C=D.c[c.id],sel=c.id===S.conto,x=C?saldi(C,c.id):null,iban=(D.banca[c.id]||{}).conto?.iban;
+  const tipo=c.id==="comune"?"Conto in comune":"Conto personale";
+  let k,v,d;
+  if(modo==="altro"){k="Saldo "+nomeExtraDi(c.id);v=x?eurS(x.altro):"…";d=x?`${x.nAltro} ${x.nAltro===1?"movimento":"movimenti"} fuori banca`:"";}
+  else{k="Saldo contabile";v=x?eur(x.banca):"…";d=x?(x.al?"al "+giorno(x.al):"nessun movimento salvato"):"";
+    if(c.carta_saldo_al!=null)d+=` · prepagata ${eur(Number(c.carta_saldo||0))}`;}
+  return `<div class="cartaconto${sel?" sel":""}" role="button" tabindex="0" data-act="conto" data-id="${c.id}" aria-pressed="${sel}" aria-label="${esc(c.nome)}">
+    <div class="cc-top"><div><small>${modo==="altro"?nomeExtraDi(c.id)+" · fuori banca":tipo}</small><b>${esc(c.nome)}</b></div>${sel?bottoneOcchio():""}</div>
+    <div class="cc-num">${modo==="altro"?"Entrate e uscite scritte a mano":iban?"Conto n. **** **** "+esc(iban):"Banca Valsabbina · conto da collegare"}</div>
+    <div class="cc-k">${k}</div><div class="cc-v num">${v}</div><div class="cc-d">${d}</div></div>`;
+}
+// Gli altri conti si caricano in sottofondo, così le loro schede mostrano subito il saldo.
+async function precarica(forza){
+  for(const c of D.conti){
+    if(c.id===S.conto||(D.c[c.id]&&!forza))continue;
+    try{await caricaConto(c.id);}catch(e){continue;}
+    if((S.tab==="panoramica"||S.tab==="altro")&&!sheet&&!$("q"))renderMain();
+  }
 }
 const bottoneOcchio=()=>`<button class="iconbtn occhio" data-act="occhio" aria-pressed="${S.nascosto}" aria-label="${S.nascosto?"Mostra gli importi":"Nascondi gli importi"}" title="${S.nascosto?"Mostra gli importi":"Nascondi gli importi"}">${icona(S.nascosto?"coperto":"privacy","oi")}</button>`;
 function occhio(v){S.nascosto=v;setPref("nascosto",v?"1":"0");nascondiTip();renderMain();if(sheet)renderSheet();}
@@ -476,7 +537,7 @@ function vAltro(C){
   const nome=nomeExtra(),tutti=C.mov.filter(m=>m.causale===CONTANTI);
   const p=S.per==="tutto"?"":S.per==="anno"?S.mese.slice(0,4):S.mese,ms=tutti.filter(m=>m.data.startsWith(p));
   const ent=ms.filter(m=>m.importo>0).reduce((s,m)=>s+m.importo,0),usc=-ms.filter(m=>m.importo<0).reduce((s,m)=>s+m.importo,0);
-  let h=barraPeriodo(true)+`<div class="toolbar"><p class="meta grow">Entrate e uscite fuori banca scritte a mano nel conto ${esc(contoNome(S.conto))}: ${tutti.length} in tutto.</p><button class="btn" data-act="contanti-nuovo">+ ${nome}</button></div>`;
+  let h=cardConti("altro")+`<div class="toolbar"><span class="grow"></span><button class="btn" data-act="contanti-nuovo">+ ${nome}</button></div>`+barraPeriodo(true);
   if(!ms.length)return h+`<div class="card empty"><b>Nessun movimento</b>${tutti.length?"In questo periodo non ce ne sono: prova «Tutto».":`Con «+ ${nome}» aggiungi entrate e uscite che non passano dalla banca.`}</div>`;
   h+=`<div class="kpis"><div class="kpi"><div class="k"><i class="key in"></i>Entrate</div><div class="v num">${segno("+",ent)}${eur(ent)}</div></div>
     <div class="kpi"><div class="k"><i class="key out"></i>Uscite</div><div class="v num">${segno("−",usc)}${eur(usc)}</div></div>
@@ -620,7 +681,7 @@ function cardObiettivo(C,o){
   ${p.storia?`<div class="months" aria-label="Ultimi mesi">${p.storia.map(s=>`<span class="${s.ok?"hit":""}" title="${ymNome(s.k)}: ${s.ok?"raggiunto":"non raggiunto"}">${MESI3[+s.k.slice(5)-1]}${s.ok?" ✓":""}</span>`).join("")}</div>`:""}</div>`;
 }
 function vObiettivi(C){
-  if(!personale())return `<div class="card empty" style="margin-top:16px"><b>Obiettivi sui conti personali</b>Risparmio e investimenti si impostano sul conto di ciascuno: apri il tuo conto in alto per vederli.</div>`;
+  if(!personale())return `<div class="card empty" style="margin-top:16px"><b>Obiettivi sui conti personali</b>Risparmio e investimenti si impostano sul conto di ciascuno.<br><br><button class="btn" data-act="conto" data-id="${persona}">Apri il conto ${esc(contoNome(persona))}</button></div>`;
   const inv=C.cats.filter(c=>c.tipo==="investimento").map(c=>c.id),nInv=C.mov.filter(m=>inv.includes(m._c.id)).length;
   let h=`<div class="toolbar"><p class="meta grow">Gli obiettivi mensili si leggono sul mese scelto in Panoramica (${ymNome(S.mese)}).</p><button class="btn" data-act="obi-nuovo">Nuovo obiettivo</button></div>`;
   if(!C.obi.length)h+=`<div class="card empty"><b>Nessun obiettivo</b>Esempi: «Risparmiare 500 € al mese», «Fondo emergenza: 5.000 € entro dicembre 2027», «Investire 200 € al mese nel PAC».</div>`;
@@ -733,7 +794,7 @@ function vImpostazioni(C){
   const b=statoBanca(),nome=esc(contoNome(S.conto));
   const sw=`<span class="switch" aria-hidden="true"><i></i></span>`;
   return `<div class="pagina"><h1>Impostazioni</h1></div>
-  <p class="gruppo">Conto ${nome}</p><div class="card lista">
+  <p class="gruppo">Conto</p>${D.conti.length>1?`<div class="seg sceltaconto" role="group" aria-label="Conto">${D.conti.map(c=>`<button data-act="conto" data-id="${c.id}" aria-pressed="${c.id===S.conto}">${esc(c.nome)}</button>`).join("")}</div>`:""}<div class="card lista">
     ${riga({tab:"banca",ic:"banca",t:"Collegamento banca",s:b.s,cl:b.cl.trim()})}
     ${riga({tab:"categorie",ic:"categorie",t:"Categorie e regole",s:`${C.cats.length} categorie · ${C.regole.length} ${C.regole.length===1?"regola":"regole"} imparate`})}</div>
   <p class="gruppo">Privacy</p><div class="card lista">
@@ -764,9 +825,8 @@ const riassunto=esiti=>{const ok=esiti.filter(x=>!x.errore),n=ok.reduce((s,x)=>s
   return ko?`${contoNome(ko.conto)}${ko.fonte==="carta"?" (prepagata)":""}: ${ko.errore}`:n?`Arrivati ${n} ${n===1?"movimento nuovo":"movimenti nuovi"}.`:"Nessun movimento nuovo: è già tutto aggiornato.";};
 async function dopoBanca(esiti){
   await Promise.all([caricaCollegamenti(),ricaricaConti()]);
-  for(const k in D.c)if(k!==S.conto)delete D.c[k];
   await caricaConto(S.conto).catch(()=>{});
-  S.banca=null;renderAll();toast(riassunto(esiti));
+  S.banca=null;renderAll();toast(riassunto(esiti));precarica(true);
 }
 async function bancaAggiorna(){
   S.banca="aggiorna";renderMain();
@@ -814,7 +874,7 @@ async function abbina(){
 /* ===================== pannello, messaggi ===================== */
 function renderSheet(){
   if(!sheet){$("overlay").hidden=true;return;}
-  const html=sheet.tipo==="mov"?sheetMov():sheet.tipo==="contanti"?sheetContanti():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheet.tipo==="abbina"?sheetAbbina():sheetObi();
+  const html=sheet.tipo==="mov"?sheetMov():sheet.tipo==="contanti"?sheetContanti():sheet.tipo==="filtri"?sheetFiltri():sheet.tipo==="cat"?sheetCat():sheet.tipo==="reg"?sheetReg():sheet.tipo==="abbina"?sheetAbbina():sheet.tipo==="periodo"?sheetPeriodo():sheetObi();
   if(!sheet)return;
   const el=$("sheet"),top=el.scrollTop;el.innerHTML=html;$("overlay").hidden=false;el.scrollTop=top;
   document.body.style.overflow="hidden";
@@ -837,6 +897,10 @@ document.addEventListener("click",e=>{
   else if(a==="per"){S.per=b.dataset.per;S.lim=150;renderMain();}
   else if(a==="mese"){S.mese=b.dataset.ym;S.per="mese";S.lim=150;nascondiTip();renderMain();}
   else if(a==="anno")scegliAnno(b.dataset.y);
+  else if(a==="per-passo")passoPeriodo(+b.dataset.d);
+  else if(a==="per-scegli"){sheet={tipo:"periodo",y:S.mese.slice(0,4)};renderSheet();}
+  else if(a==="p-anno"){if(S.per==="anno"){chiudi();scegliAnno(b.dataset.y);}else{sheet.y=b.dataset.y;renderSheet();}}
+  else if(a==="p-mese"){S.mese=b.dataset.ym;S.lim=150;chiudi();nascondiTip();renderMain();}
   else if(a==="vai-todo"||a==="vai-todo-tutti"){S.tab="movimenti";S.filtri={...filtriVuoti(),cats:["da-classificare"]};S.verso="tutti";S.q="";if(a==="vai-todo-tutti")S.per="tutto";renderAll();}
   else if(a==="vai-cat"&&S.tab==="dashboard"){S.tab="movimenti";S.filtri={...filtriVuoti(),cats:[b.dataset.cat]};S.verso="tutti";S.q="";
     if(S.dper&&S.dper!=="12m"){S.per="anno";S.mese=S.dper+S.mese.slice(4);}else S.per="tutto";nascondiTip();renderAll();scrollTo({top:0});}
@@ -893,7 +957,9 @@ document.addEventListener("change",e=>{
   const t=e.target;
   if(t.dataset.sheet==="regola"){sheet.regola=t.checked;renderSheet();}
 });
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(sheet)chiudi();else if(S.menu){S.menu=false;renderTabs();}}});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList&&e.target.classList.contains("cartaconto")){e.preventDefault();e.target.click();return;}
+  if(e.key==="Escape"){if(sheet)chiudi();else if(S.menu){S.menu=false;renderTabs();}}});
+matchMedia(TEL).addEventListener("change",()=>{if(C0())renderAll();}); // telefono ⇄ PC: cambiano barra e periodo
 let rT;addEventListener("resize",()=>{clearTimeout(rT);rT=setTimeout(()=>{disegnaGrafici();if(typeof disegnaDashboard==="function")disegnaDashboard();},120);});
 
 /* ===================== accesso e avvio ===================== */
@@ -908,7 +974,7 @@ async function apriConto(id){
     if(S.conto!==id)return;
     S.mese=D.c[id].ultimo||ymOggi();
   }
-  renderAll();
+  renderAll();precarica();
 }
 async function start(){
   document.body.className="signed-in";$("login").hidden=true;$("app").hidden=false;
@@ -936,7 +1002,7 @@ async function aggiorna(){
   const id=S.conto;if(!id||!D.c[id])return;
   try{await Promise.all([caricaConto(id),caricaCollegamenti(),ricaricaConti()]);}catch(e){return;}
   if(id!==S.conto)return;
-  for(const k in D.c)if(k!==id)delete D.c[k];
+  precarica(true);
   const a=document.activeElement;
   if(sheet||(a&&a.closest&&a.closest("#main")&&/INPUT|SELECT|TEXTAREA/.test(a.tagName))){renderConti();renderTabs();if(S.tab==="movimenti")renderLista();return;}
   renderAll();

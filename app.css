@@ -376,3 +376,41 @@ button.riga:hover,a.riga:hover{background:var(--chip)}
 .occhio[aria-pressed="true"]{color:var(--soft-ink);background:var(--soft)}
 .card.ultimi{margin-bottom:14px}
 .solo-pc .occhio{margin:0;width:42px;height:42px;border:1px solid var(--line);border-radius:999px;background:var(--surface)}
+
+/* ---------- schede dei conti (Dashboard e Altro) ---------- */
+.carosello{display:flex;gap:12px;margin:16px 0 14px}
+.cartaconto{flex:1 1 0;max-width:440px;min-width:0;border-radius:22px;padding:16px 18px 18px;background:var(--surface);border:1px solid var(--line);cursor:pointer;display:flex;flex-direction:column;gap:2px;text-align:left;color:var(--ink)}
+.cartaconto.sel{background:var(--yellow) url("img/pattern-allos.svg") 0 0/180px auto repeat;border-color:var(--yellow);color:var(--on-yellow)}
+.cartaconto:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.cc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.cc-top small{display:block;font-size:12px;opacity:.75}
+.cc-top b{display:block;font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:18px;letter-spacing:.02em}
+.cc-num{font-size:13px;letter-spacing:.05em;opacity:.8;margin:6px 0 14px;font-variant-numeric:tabular-nums}
+.cc-k{font-size:12.5px;opacity:.75}
+.cc-v{font-size:clamp(26px,8vw,34px);font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cc-d{font-size:12px;opacity:.75;min-height:1.3em}
+.cartaconto .occhio{margin:-8px -10px 0 0;color:inherit;background:none}
+.cartaconto.sel .occhio[aria-pressed="true"]{background:rgb(0 0 0 / .1);color:inherit}
+.puntini{display:none}
+.ptel{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin:16px 0 12px}
+.ptel .seg button{padding-inline:11px}
+.pnav{display:flex;align-items:center;gap:2px;margin-left:auto;min-width:0}
+.pfreccia{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:20px;line-height:1;cursor:pointer;flex:none}
+.pfreccia:disabled{opacity:.35;cursor:default}
+.plab{border:0;background:none;color:var(--ink);font:inherit;font-weight:700;font-size:15px;padding:6px;white-space:nowrap;cursor:pointer;display:inline-flex;gap:5px;align-items:center}
+.plab .caret{font-size:11px;color:var(--muted)}
+.mesigrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.mesigrid .pchip{width:100%;justify-content:center}
+.mesigrid .pchip:disabled{opacity:.35}
+.sceltaconto{margin:0 0 10px}
+@media (max-width:820px),(pointer:coarse) and (max-width:1024px){
+  body.signed-in .band{display:none}
+  body.signed-in .wrap.app{padding-top:max(14px,env(safe-area-inset-top,0px))}
+  .topbar .conti{display:none}
+  .carosello{overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;margin:4px -16px 0;padding:2px 16px 4px;scroll-padding-inline:16px}
+  .carosello::-webkit-scrollbar{display:none}
+  .cartaconto{flex:0 0 calc(100% - 26px);max-width:none;scroll-snap-align:center}
+  .puntini{display:flex;justify-content:center;gap:6px;margin:10px 0 14px}
+  .puntini button{width:7px;height:7px;border-radius:999px;border:0;background:var(--line);padding:0;cursor:pointer;transition:width .15s}
+  .puntini button[aria-pressed="true"]{width:20px;background:var(--yellow)}
+}
