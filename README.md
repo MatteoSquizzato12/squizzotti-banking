@@ -52,6 +52,10 @@ Tipi di categoria: **normale** (entrate/uscite), **trasferimento** (giroconti tr
 
 `supabase/schema.sql` va eseguito una volta nel SQL Editor di Supabase (si può rieseguire). Richiede la tabella `membri` già usata da Squizzotti's Diet (la crea se manca).
 
+## Stile
+
+In Impostazioni → Stile si sceglie, su ogni dispositivo, tra **Allos** (giallo e antracite, brand dello studio) e **Private** (blu notte e neutri, Inter/Inter Tight). Le regole di Private stanno in fondo ad `app.css` sotto `:root[data-stile="private"]`; i colori di entrate, uscite e risparmio sono verificati per daltonismo e contrasto.
+
 ## Rilasciare una nuova versione
 
 Dopo aver cambiato i file, aumentare `VERSION` in `sw.js`, poi commit e push su `main`.

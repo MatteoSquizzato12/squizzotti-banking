@@ -15,15 +15,12 @@ const filtriVuoti=()=>({cats:[],min:"",max:"",nota:false,manuale:false});
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const EUR=new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"});
-// Stili in prova («Lo stile di casa Squizzotti», PDF per Anna): si sceglie in Impostazioni, vale su questo dispositivo.
+// Stile dell'app: «Allos» (giallo e antracite, il brand dello studio) o «Private» (blu notte, sobrio). Si sceglie in
+// Impostazioni e vale su questo dispositivo; uno stile non più disponibile torna ad Allos.
 const STILI={
-  private:{nome:"Private (proposta)",desc:"Blu notte e neutri, stile private banking",col:["#14305A","#F5F6F8"],
+  private:{nome:"Private",desc:"Blu notte e neutri, stile private banking",col:["#14305A","#F5F6F8"],
     font:"family=Inter:opsz,wght@14..32,400..700&family=Inter+Tight:wght@500..700"},
-  allos:{nome:"Allos",desc:"Giallo e antracite, come lo studio",col:["#FAB80C","#1E2021"]},
-  oliva:{nome:"Oliva e Ambra",desc:"Verde oliva profondo e ambra dorata",col:["#3B4A2A","#D69A35"],
-    font:"family=Bodoni+Moda:opsz,wght@6..96,500..700&family=Figtree:wght@400;500;600;700"},
-  tramonto:{nome:"Tramonto mediterraneo",desc:"Albicocca e corallo con blu petrolio",col:["#F2A365","#1F4A5C"],
-    font:"family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400..700"}};
+  allos:{nome:"Allos",desc:"Giallo e antracite, come lo studio",col:["#FAB80C","#1E2021"]},};
 function applicaStile(v){
   if(!STILI[v])v="allos";document.documentElement.dataset.stile=v;
   const F=STILI[v].font;if(F&&!document.querySelector(`link[data-stile="${v}"]`)){const l=document.createElement("link");l.rel="stylesheet";l.dataset.stile=v;l.href="https://fonts.googleapis.com/css2?"+F+"&display=swap";document.head.appendChild(l);}
@@ -31,7 +28,7 @@ function applicaStile(v){
   return v;
 }
 applicaStile(pref("stile","allos"));
-// Due monete che si intersecano (noi due, in mezzo ciò che è di entrambi): il logo degli stili nuovi.
+// Due monete che si intersecano (noi due, in mezzo ciò che è di entrambi): il logo dello stile «Private».
 const MONETE='<svg class="logo" viewBox="0 0 100 64" aria-hidden="true"><path d="M50 10.1A26 26 0 0 1 50 53.9A26 26 0 0 1 50 10.1Z" fill="var(--dettaglio)"/><circle cx="36" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="5"/><circle cx="64" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="5"/></svg>';
 // Importi nascosti (occhio, come nelle app delle banche): ogni cifra in euro passa da qui, grafici compresi.
 const COPERTO="••••• €";
@@ -850,7 +847,7 @@ function vImpostazioni(C){
     ${riga({tab:"categorie",ic:"categorie",t:"Categorie e regole",s:`${C.cats.length} categorie · ${C.regole.length} ${C.regole.length===1?"regola":"regole"} imparate`})}</div>
   <p class="gruppo">Privacy</p><div class="card lista">
     <button class="riga" data-act="occhio-imp" role="switch" aria-checked="${S.nascosto}"><span class="ric">${icona(S.nascosto?"coperto":"privacy","oi")}</span><span class="rt"><b>Nascondi gli importi</b><small>Saldi e cifre coperti, su questo dispositivo. Si cambia anche con l'occhio sul saldo.</small></span>${sw}</button></div>
-  <p class="gruppo">Stile (prova)</p><div class="card lista">
+  <p class="gruppo">Stile</p><div class="card lista">
     ${Object.entries(STILI).map(([k,x])=>`<button class="riga" data-act="stile" data-v="${k}" role="radio" aria-checked="${document.documentElement.dataset.stile===k}"><span class="ric stilecol" style="background:linear-gradient(135deg,${x.col[0]} 50%,${x.col[1]} 50%)"></span><span class="rt"><b>${x.nome}</b><small>${x.desc}</small></span><span class="spunta" aria-hidden="true">${document.documentElement.dataset.stile===k?"✓":""}</span></button>`).join("")}</div>
   <p class="gruppo">Account</p><div class="card lista">
     ${riga({ic:"account",t:"Accesso",s:esc(user?.email||"")})}

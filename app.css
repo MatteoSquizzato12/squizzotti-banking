@@ -457,7 +457,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
 }
 
 
-/* ---------- stili in prova (Impostazioni → Stile): «Lo stile di casa Squizzotti» ---------- */
+/* ---------- stili diversi da Allos (Impostazioni → Stile): regole comuni ---------- */
 /* --yellow = colore delle azioni (pulsanti, voce attiva), --fascia = scheda del conto aperto, --dettaglio = logo e accenti */
 :root[data-stile]:not([data-stile="allos"]) :is(h1,h2,h3,.empty b,.tip b,.cc-top b,.lconto b,.lato-brand b,.mov .dt b,.conto .av){text-transform:none;letter-spacing:0;font-weight:600}
 :root[data-stile]:not([data-stile="allos"]) :is(h2,h3){font-size:1.18em}
@@ -467,32 +467,6 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
 :root[data-stile]:not([data-stile="allos"]) .lato-brand b{font-size:18px;line-height:1.05}
 :root[data-stile]:not([data-stile="allos"]) .lato-brand .logo{background:var(--fascia-solo,var(--yellow));padding:8px}
 
-:root[data-stile="oliva"]{
-  --bg:#F5F2EA; --surface:#FFFFFF; --ink:#1E241C; --muted:#5E6656; --line:#E2DED2; --chip:#ECEADF;
-  --yellow:#3B4A2A; --on-yellow:#F5F2EA; --soft:#F6E8CC; --soft-ink:#6E4A0E; --dettaglio:#D69A35;
-  --fascia:#3B4A2A; --on-fascia:#F5F2EA; --fascia-solo:#3B4A2A;
-  --in:#3E8068; --out:#B35A3A; --s1:#3B4A2A; --s2:#D69A35; --s3:#3E8068; --s4:#B35A3A;
-  --f-display:"Bodoni Moda", Georgia, serif; --f-body:"Figtree", "Segoe UI", system-ui, sans-serif; color-scheme:light;
-}
-:root[data-stile="tramonto"]{
-  --bg:#FFF8F2; --surface:#FFFFFF; --ink:#1D2B36; --muted:#5B6A75; --line:#F1E2D6; --chip:#FCEFE4;
-  --yellow:#1F4A5C; --on-yellow:#FFFFFF; --soft:#FDE6D4; --soft-ink:#8A3B22; --dettaglio:#F2A365;
-  --fascia:linear-gradient(135deg,#F5B07A 0%,#E8704F 100%); --on-fascia:#1D2B36; --fascia-solo:#1F4A5C;
-  --in:#2A8088; --out:#E8704F; --s1:#E8704F; --s2:#F2A365; --s3:#2A8088; --s4:#1F4A5C;
-  --f-display:"DM Serif Display", Georgia, serif; --f-body:"DM Sans", "Segoe UI", system-ui, sans-serif; color-scheme:light;
-}
-@media (prefers-color-scheme: dark){
-  :root[data-stile="oliva"]:not([data-theme="light"]){
-    --bg:#11150E; --surface:#1A2016; --ink:#ECEADF; --muted:#A6AD9B; --line:#2D3527; --chip:#232A1E;
-    --yellow:#D69A35; --on-yellow:#1E241C; --soft:#2E2614; --soft-ink:#EBC27A;
-    --fascia:#3B4A2A; --on-fascia:#F5F2EA; --in:#5BA386; --out:#D07455; --grid:#262D21; --axis:#3D4636; color-scheme:dark;
-  }
-  :root[data-stile="tramonto"]:not([data-theme="light"]){
-    --bg:#0E1820; --surface:#16242E; --ink:#FFF3E8; --muted:#A5B4BF; --line:#263845; --chip:#1D2E3A;
-    --yellow:#F2A365; --on-yellow:#1D2B36; --soft:#33261D; --soft-ink:#F6C29A;
-    --in:#3FA7AE; --out:#F08463; --grid:#1F303C; --axis:#33495A; color-scheme:dark;
-  }
-}
 .stilecol{border:1px solid var(--line)}
 .spunta{font-weight:700;color:var(--yellow);font-size:18px;min-width:18px;text-align:center}
 
