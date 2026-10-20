@@ -15,7 +15,7 @@ function numero(v){
 const pulisci=s=>String(s==null?"":s).replace(/\s+/g," ").trim();
 
 /* ---------- carta prepagata: Excel di Nexi ---------- */
-// Foglio «Movimenti conto»: una riga «Movimenti Carta **** **** **** 8644», poi l'intestazione
+// Foglio «Movimenti conto»: una riga «Movimenti Carta **** **** **** 1234», poi l'intestazione
 // Mese | Data | Riferimento | Categorie | Descrizione | Stato | Importo originale in Divisa | Divisa | Importo (€) | …
 // Le righe «Non Contabilizzato» si saltano: tornano nel file del mese dopo, con il loro riferimento.
 // Le ricariche («RICARICA DA HOMEBANKING») non hanno riferimento: la chiave le distingue per data e importo.
