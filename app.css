@@ -2,7 +2,7 @@
 @font-face{font-family:"Akira Expanded";src:url("fonts/akira-super-bold.woff2") format("woff2");font-weight:800;font-style:normal;font-display:swap}
 :root{
   --bg:#ECEDEE; --surface:#FFFFFF; --ink:#1E2021; --muted:#535353; --line:#D9DBDD; --chip:#F1F2F3;
-  --yellow:#FAB80C; --on-yellow:#1E2021; --soft:#FFF1C7; --soft-ink:#5A4300;
+  --yellow:#FAB80C; --on-yellow:#1E2021; --soft:#FFF1C7; --soft-ink:#5A4300; --dettaglio:#FFFFFF;
   /* Grafici: colori verificati per daltonismo e contrasto (entrate blu, uscite ocra) */
   --in:#2A78D6; --out:#C98500; --grid:#E6E7E8; --axis:#C3C5C7;
   /* Ciambella: 8 colori categoriali verificati (ordine fisso), 8 tinte degli stessi colori, grigio oltre la 16a */
@@ -48,8 +48,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .band .wrap{padding-block:26px 26px}
 .band .top{display:flex;justify-content:center}
 .brand{display:flex;flex-direction:column;align-items:center;gap:12px}
-.logo{width:clamp(60px,7vw,84px);height:auto;overflow:visible}
-.logo .coin{fill:#FFFFFF} .logo .eur{fill:none;stroke:var(--on-yellow);stroke-width:7.5;stroke-linecap:round} .logo .bone{fill:var(--on-yellow)}
+.logo{width:clamp(60px,7vw,84px);height:auto;overflow:visible;color:var(--on-yellow)} /* cerchi del colore del testo sulla fascia, lente in --dettaglio */
 h1{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:clamp(20px,4.2vw,34px);letter-spacing:.01em;line-height:1.05;margin:0;text-align:center}
 
 /* ---------- titoli, schede, pulsanti ---------- */
@@ -551,7 +550,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
 /* accesso: fascia blu notte al posto del giallo */
 :root[data-stile="private"] .band{background:#0E2443;background-image:radial-gradient(120% 160% at 100% 0%,rgb(255 255 255/.12),transparent 55%);color:#FFFFFF}
 :root[data-stile="private"] .band h1{font-family:var(--f-display);text-transform:none;letter-spacing:-.03em;font-weight:600}
-:root[data-stile="private"] .band .logo .coin{fill:#FFFFFF}:root[data-stile="private"] .band .logo .eur{stroke:#0E2443}:root[data-stile="private"] .band .logo .bone{fill:#FFFFFF}
+:root[data-stile="private"] .band .logo{color:#FFFFFF}
 :root[data-stile="private"] .kpis{grid-template-columns:repeat(3,minmax(0,1fr));justify-content:stretch}
 :root[data-stile="private"] .kpis.k4{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:560px){:root[data-stile="private"] .kpis,:root[data-stile="private"] .kpis.k4{grid-template-columns:repeat(2,minmax(0,1fr))}}

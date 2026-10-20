@@ -28,7 +28,7 @@ function applicaStile(v){
   return v;
 }
 applicaStile(pref("stile","allos"));
-// Due monete che si intersecano (noi due, in mezzo ciò che è di entrambi): il logo dello stile «Private».
+// Logo dell'app: due monete che si intersecano (noi due, in mezzo ciò che è di entrambi). Uguale in index.html e nelle icone.
 const MONETE='<svg class="logo" viewBox="0 0 100 64" aria-hidden="true"><path d="M50 10.1A26 26 0 0 1 50 53.9A26 26 0 0 1 50 10.1Z" fill="var(--dettaglio)"/><circle cx="36" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="5"/><circle cx="64" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="5"/></svg>';
 // Importi nascosti (occhio, come nelle app delle banche): ogni cifra in euro passa da qui, grafici compresi.
 const COPERTO="••••• €";
@@ -184,7 +184,6 @@ function renderTabs(){
 }
 // PC: colonna laterale come nell'home banking da computer (al posto della fascia con il titolo e del menu a tendina):
 // logo, schede dei conti con il saldo, sezioni, interruttore degli importi, accesso. In «Altro» le schede mostrano il saldo Altro.
-const LOGO=(document.querySelector(".band .logo")||{}).outerHTML||"";
 function renderLato(menu,sel,ic){
   const el=$("lato");if(!el)return;
   if(!C0()){el.innerHTML="";return;}
@@ -192,7 +191,7 @@ function renderLato(menu,sel,ic){
   const conti=contiDi(S.tab).map(c=>{const C=D.c[c.id],x=C?saldi(C,c.id):null,iban=(D.banca[c.id]||{}).conto?.iban,on=c.id===S.conto;
     return `<button class="lconto${on?" sel":""}" data-act="conto" data-id="${c.id}" aria-pressed="${on}"><small>${c.id==="comune"?"Conto in comune":"Conto personale"}${iban?" · **** "+esc(iban):""}</small>
       <b>${esc(c.nome)}</b><span class="lc-k">${altro?"Saldo "+nomeExtraDi(c.id):"Saldo contabile"}</span><span class="lc-v num">${x?(altro?eurS(x.altro):eur(x.banca)):"…"}</span></button>`;}).join("");
-  el.innerHTML=`<div class="lato-brand">${document.documentElement.dataset.stile==="allos"?LOGO:MONETE}<b>Squizzotti's Banking</b></div>
+  el.innerHTML=`<div class="lato-brand">${MONETE}<b>Squizzotti's Banking</b></div>
     <p class="lato-tit">Conti</p><div class="lato-conti">${conti}</div>
     <p class="lato-tit">Sezioni</p><nav class="lato-nav">${menu.map(([id,t,c])=>`<button class="menuitem" data-act="tab" data-tab="${id}" aria-current="${sel===id}">${ic(id)}<span>${t}</span>${c?`<span class="count" title="Da classificare">${c}</span>`:""}</button>`).join("")}</nav>
     <div class="lato-piede"><button class="riga" data-act="occhio-imp" role="switch" aria-checked="${S.nascosto}"><span class="ric">${icona(S.nascosto?"coperto":"privacy","oi")}</span><span class="rt"><b>Nascondi gli importi</b></span><span class="switch" aria-hidden="true"><i></i></span></button>

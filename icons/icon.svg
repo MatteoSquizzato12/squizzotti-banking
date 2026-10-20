@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#FAB80C"/>
-  <g transform="translate(116 133) scale(1.7968)">
-    <circle cx="78" cy="48" r="46" fill="#FFFFFF"/>
-    <path d="M96.1,31.1 A22,22 0 1 0 96.1,64.9 M53,43 H80 M53,53 H80" fill="none" stroke="#1E2021" stroke-width="7.5" stroke-linecap="round"/>
-    <g fill="#1E2021">
-      <circle cx="25.04" cy="112.12" r="25.03"/>
-      <circle cx="130.81" cy="112.12" r="25.03"/>
-      <path d="m41.73,130.76s13.35-13.93,36.19-13.93,36.18,13.93,36.18,13.93v-37.29s-14.42,14.29-36.18,14.29c-22.83,0-36.19-14.3-36.19-14.3v37.3Z"/>
-    </g>
-  </g>
+  <defs>
+    <linearGradient id="f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0E2443"/><stop offset=".55" stop-color="#17345F"/><stop offset="1" stop-color="#22508C"/></linearGradient>
+    <radialGradient id="r" cx="1" cy="0" r="1.2"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".16"/><stop offset=".55" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#f)"/>
+  <rect width="512" height="512" fill="url(#r)"/>
+  <!-- due monete che si intersecano: noi due, in mezzo ciò che è di entrambi -->
+  <path d="M256 149.1A118 118 0 0 1 256 362.9A118 118 0 0 1 256 149.1Z" fill="#9DB8EA"/>
+  <circle cx="206" cy="256" r="118" fill="none" stroke="#FFFFFF" stroke-width="22"/>
+  <circle cx="306" cy="256" r="118" fill="none" stroke="#FFFFFF" stroke-width="22"/>
 </svg>
