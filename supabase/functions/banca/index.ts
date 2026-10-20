@@ -260,12 +260,19 @@ Deno.serve(async (req) => {
       if (!a.sessione) { // il codice della banca vale una volta sola: se la pagina viene ricaricata si riusa la sessione
         const s = await eb("POST", "/sessions", { code: corpo.code }, ip);
         // Ultime 4 cifre dell'IBAN o, per le carte, del numero della carta (mascherato dalla banca).
+        // Proposta: il conto dell'app a cui quel conto della banca è già collegato (il cointestato visto da Anna resta il
+        // «comune»: la banca a volte lo intesta solo a chi fa l'accesso); altrimenti comune se è cointestato, se no il proprio.
+        const { data: gia } = await db.from("banca_collegamenti").select("conto,iban")
+          .eq("fonte", BANCHE[a.banca || "valsabbina"].fonte);
         // deno-lint-ignore no-explicit-any
-        const conti = (s.accounts || []).map((x: any) => ({
-          uid: x.uid, nome: x.name || x.product || x.details || "",
-          iban: String(x.account_id?.iban || x.account_id?.other?.identification || x.details || "").replace(/\D/g, "").slice(-4),
-          suggerito: /,/.test(x.name || "") ? "comune" : me.persona,
-        }));
+        const conti = (s.accounts || []).map((x: any) => {
+          const iban = String(x.account_id?.iban || x.account_id?.other?.identification || x.details || "").replace(/\D/g, "").slice(-4);
+          const gc = iban ? (gia || []).find((g) => g.iban === iban && puo(g.conto)) : null;
+          return {
+            uid: x.uid, nome: x.name || x.product || x.details || "", iban, gia: gc ? gc.conto : null,
+            suggerito: gc ? gc.conto : /,/.test(x.name || "") ? "comune" : me.persona,
+          };
+        });
         const { error } = await db.from("banca_attese").update({ sessione: s.session_id, conti, scade: s.access?.valid_until })
           .eq("state", a.state);
         if (error) throw error;
@@ -287,6 +294,16 @@ Deno.serve(async (req) => {
         if (!a.conti.some((c: any) => c.uid === x.uid)) throw new Rifiuto("Conto della banca sconosciuto");
         if (visti.has(x.conto)) throw new Rifiuto("Due conti della banca sullo stesso conto dell'app");
         visti.add(x.conto);
+        // Lo stesso conto della banca non va su due conti dell'app (i movimenti finirebbero doppi): prima si scollega.
+        // deno-lint-ignore no-explicit-any
+        const iban = a.conti.find((c: any) => c.uid === x.uid)?.iban;
+        const { data: altro } = iban
+          ? await db.from("banca_collegamenti").select("conto").eq("fonte", BANCHE[a.banca || "valsabbina"].fonte)
+            .eq("iban", iban).neq("conto", x.conto).limit(1)
+          : { data: [] };
+        if (altro?.length) {
+          throw new Rifiuto(`Il conto …${iban} della banca è già collegato a un altro conto dell'app: scollegalo prima di spostarlo.`);
+        }
       }
       const fonte = BANCHE[a.banca || "valsabbina"].fonte;
       const righe = scelte.map((x: { uid: string; conto: string }) => ({
